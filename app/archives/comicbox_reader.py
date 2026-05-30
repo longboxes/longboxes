@@ -54,6 +54,7 @@ logger = logging.getLogger("longboxes.archives.comicbox_reader")
 # imported. Idempotent — setting it again with the same value is fine.
 try:
     import rarfile as _rarfile
+
     _rarfile.UNRAR_TOOL = "unar"
 except ImportError:  # pragma: no cover — rarfile is a direct dep
     pass
@@ -119,13 +120,12 @@ class ComicboxReader:
         ``PAGE_EXTENSIONS`` whitelist as the stdlib reader as a
         defensive backstop — older comicbox versions or odd
         archives could surface non-image files."""
+
         def _do() -> list[str]:
             with _open_comicbox(self.path) as cb:
                 names = cb.get_page_filenames() or []
-                return [
-                    n for n in names
-                    if Path(n).suffix.lower() in PAGE_EXTENSIONS
-                ]
+                return [n for n in names if Path(n).suffix.lower() in PAGE_EXTENSIONS]
+
         return _safe(f"list_pages {self.path}", _do)
 
     def read_comicinfo(self) -> bytes | None:
@@ -148,9 +148,7 @@ class ComicboxReader:
         ``read_metroninfo``."""
         return self._read_root_entry(METRONINFO_NAMES, "read_metroninfo")
 
-    def _read_root_entry(
-        self, names: frozenset[str], label: str
-    ) -> bytes | None:
+    def _read_root_entry(self, names: frozenset[str], label: str) -> bytes | None:
         """Find a root-level archive entry whose basename matches
         one of ``names`` and return its raw bytes.
 
@@ -159,24 +157,26 @@ class ComicboxReader:
         rules it has for what counts as an archive entry) and then
         dispatch to the underlying archive library for the actual
         byte extraction. See ``_read_archive_entry`` for the dispatch."""
+
         def _do() -> bytes | None:
             with _open_comicbox(self.path) as cb:
                 target = _find_root_entry(cb.namelist() or [], names)
                 if target is None:
                     return None
                 return _read_archive_entry(self.path, target)
+
         return _safe(f"{label} {self.path}", _do)
 
     def extract_page(self, name: str) -> bytes:
         """Return raw image bytes for the named page entry."""
+
         def _do() -> bytes:
             with _open_comicbox(self.path) as cb:
                 data = cb.get_page_by_filename(name)
                 if data is None:
-                    raise ArchiveError(
-                        f"page {name!r} not found in {self.path}"
-                    )
+                    raise ArchiveError(f"page {name!r} not found in {self.path}")
                 return data
+
         return _safe(f"extract_page {self.path} {name!r}", _do)
 
     # ---- Extra capabilities surfaced beyond the Protocol ---------------
@@ -187,9 +187,11 @@ class ComicboxReader:
 
     def page_count(self) -> int:
         """Total page count from comicbox (post sort + filter)."""
+
         def _do() -> int:
             with _open_comicbox(self.path) as cb:
                 return int(cb.get_page_count() or 0)
+
         return _safe(f"page_count {self.path}", _do)
 
     def cover_filename(self) -> str | None:
@@ -198,19 +200,19 @@ class ComicboxReader:
         Comes from ComicInfo ``<Page Type="FrontCover">`` when
         present; falls back to the first page otherwise. Returns
         None on an empty archive."""
+
         def _do() -> str | None:
             with _open_comicbox(self.path) as cb:
                 paths = cb.get_cover_path_list() or []
                 return paths[0] if paths else None
+
         return _safe(f"cover_filename {self.path}", _do)
 
 
 # ---- Helpers -------------------------------------------------------------
 
 
-def _find_root_entry(
-    namelist: list[str], names: frozenset[str]
-) -> str | None:
+def _find_root_entry(namelist: list[str], names: frozenset[str]) -> str | None:
     """Find the first root-level archive entry whose basename is in
     ``names``. Matches the same case-exact, root-only rule the stdlib
     backends use so the two paths agree on which file counts as "the"
@@ -248,29 +250,25 @@ def _read_archive_entry(path: Path, entry: str) -> bytes:
     try:
         if suffix in ("cbz", "zip"):
             import zipfile
+
             with zipfile.ZipFile(path) as zf:
                 return zf.read(entry)
         if suffix in ("cbr", "rar"):
             import rarfile
+
             with rarfile.RarFile(path) as rf:
                 return rf.read(entry)
         if suffix in ("cb7", "7z"):
             import py7zr
+
             with py7zr.SevenZipFile(path, mode="r") as sf:
                 contents: dict[str, Any] = sf.read(targets=[entry]) or {}
                 buf = contents.get(entry)
                 if buf is None:
-                    raise ArchiveError(
-                        f"entry {entry!r} not found in {path}"
-                    )
+                    raise ArchiveError(f"entry {entry!r} not found in {path}")
                 return buf.read()
-        raise ArchiveError(
-            f"raw entry read not supported for {suffix!r} archives"
-        )
+        raise ArchiveError(f"raw entry read not supported for {suffix!r} archives")
     except ArchiveError:
         raise
     except Exception as e:
-        raise ArchiveError(
-            f"failed to read {entry!r} from {path}: "
-            f"{type(e).__name__}: {e}"
-        ) from e
+        raise ArchiveError(f"failed to read {entry!r} from {path}: {type(e).__name__}: {e}") from e

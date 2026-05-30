@@ -39,12 +39,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "files", sa.Column("interior_width", sa.Integer(), nullable=True)
-    )
-    op.add_column(
-        "files", sa.Column("interior_height", sa.Integer(), nullable=True)
-    )
+    op.add_column("files", sa.Column("interior_width", sa.Integer(), nullable=True))
+    op.add_column("files", sa.Column("interior_height", sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:

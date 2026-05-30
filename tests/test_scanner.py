@@ -156,9 +156,7 @@ async def test_scan_flags_double_wide_cover(engine, db_session, tmp_path: Path):
     assert files[0].cover_width == 1950
 
 
-async def test_scan_leaves_cover_null_for_non_image_pages(
-    engine, db_session, tmp_path: Path
-):
+async def test_scan_leaves_cover_null_for_non_image_pages(engine, db_session, tmp_path: Path):
     """A CBZ whose 'pages' aren't decodable images → cover columns
     stay null. Cover inspection is best-effort; it never fails a scan."""
     build_cbz(tmp_path / "bogus.cbz", page_count=2, page_payload=b"not-an-image")
@@ -173,9 +171,7 @@ async def test_scan_leaves_cover_null_for_non_image_pages(
 # ---- Fast-path skip -----------------------------------------------------
 
 
-async def test_second_scan_takes_fast_path_for_unchanged_file(
-    engine, db_session, tmp_path: Path
-):
+async def test_second_scan_takes_fast_path_for_unchanged_file(engine, db_session, tmp_path: Path):
     build_cbz(tmp_path / "comic.cbz", page_payload=b"A")
     first, _ = await _run_scan(engine, tmp_path)
     assert first.new_files == 1
@@ -192,9 +188,7 @@ async def test_second_scan_takes_fast_path_for_unchanged_file(
 # ---- Content changed at same path --------------------------------------
 
 
-async def test_content_changed_at_same_path_repoints_location(
-    engine, db_session, tmp_path: Path
-):
+async def test_content_changed_at_same_path_repoints_location(engine, db_session, tmp_path: Path):
     build_cbz(tmp_path / "comic.cbz", page_payload=b"A")
     await _run_scan(engine, tmp_path)
     files_before = await _all_files(engine)
@@ -220,9 +214,7 @@ async def test_content_changed_at_same_path_repoints_location(
 # ---- Clean move (delete A, create B with same content) -----------------
 
 
-async def test_clean_move_collapses_to_single_location(
-    engine, db_session, tmp_path: Path
-):
+async def test_clean_move_collapses_to_single_location(engine, db_session, tmp_path: Path):
     src = tmp_path / "a.cbz"
     dst = tmp_path / "b.cbz"
     build_cbz(src, page_payload=b"MOVE-ME")
@@ -290,9 +282,7 @@ async def test_disappeared_file_is_marked_missing(engine, db_session, tmp_path: 
 # ---- excluded_from_matching is honored ---------------------------------
 
 
-async def test_existing_files_are_not_re_enqueued_on_rescan(
-    engine, db_session, tmp_path: Path
-):
+async def test_existing_files_are_not_re_enqueued_on_rescan(engine, db_session, tmp_path: Path):
     """The scanner enqueues ``match_file`` only for *new* files.
 
     Existing files — whether excluded_from_matching or not — are never
@@ -369,9 +359,7 @@ async def test_scan_with_missing_library_root_warns_and_continues(
 # ---- CV-key gate --------------------------------------------------------
 
 
-async def test_scan_enqueues_match_jobs_even_without_cv_key(
-    engine, db_session, tmp_path: Path
-):
+async def test_scan_enqueues_match_jobs_even_without_cv_key(engine, db_session, tmp_path: Path):
     """Scanner always enqueues match jobs regardless of CV key state.
 
     The match worker itself is the place that knows whether the

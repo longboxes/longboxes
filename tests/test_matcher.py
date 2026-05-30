@@ -161,9 +161,7 @@ async def test_stage1_full_with_cvid_auto_matches(db_session, tmp_path: Path):
     volume = await db_session.get(CvVolume, 18166)
     assert volume is not None
     assert volume.count_of_issues == 60
-    assert not (
-        isinstance(volume.raw_payload, dict) and volume.raw_payload.get("_stub")
-    )
+    assert not (isinstance(volume.raw_payload, dict) and volume.raw_payload.get("_stub"))
 
 
 @respx.mock
@@ -288,9 +286,7 @@ async def _seed_cv_issue_with_volume(
 
 
 @respx.mock
-async def test_stage1_short_circuit_skips_cv_when_issue_cached(
-    db_session, tmp_path: Path
-):
+async def test_stage1_short_circuit_skips_cv_when_issue_cached(db_session, tmp_path: Path):
     """Lever 1 — the headline hyperspeed win. When the ``cv_issues``
     row already exists with a populated ``volume_cv_id``, Stage 1
     must NOT hit ``/issue/<id>/`` on the issue gate (the slow
@@ -304,13 +300,9 @@ async def test_stage1_short_circuit_skips_cv_when_issue_cached(
     request. A pass here proves the matcher made zero HTTP calls.
     """
     await _seed_key(db_session)
-    await _seed_cv_issue_with_volume(
-        db_session, cv_id=345678, volume_cv_id=18166
-    )
+    await _seed_cv_issue_with_volume(db_session, cv_id=345678, volume_cv_id=18166)
 
-    xml = build_comicinfo_full(
-        series="Saga", number="1", year=2012, cv_issue_id=345678
-    )
+    xml = build_comicinfo_full(series="Saga", number="1", year=2012, cv_issue_id=345678)
     file_row = await _make_file_with_location(
         db_session,
         tmp_path,
@@ -334,9 +326,7 @@ async def test_stage1_short_circuit_skips_cv_when_issue_cached(
 
 
 @respx.mock
-async def test_stage1_winner_enqueues_volume_issues(
-    db_session, tmp_path: Path
-):
+async def test_stage1_winner_enqueues_volume_issues(db_session, tmp_path: Path):
     """Lever 2 — the matcher fires the bulk ``volume_issues``
     hydration for the winning volume after a successful Stage 1
     match. The cache layer's ``_upsert_volume`` no longer enqueues
@@ -350,13 +340,9 @@ async def test_stage1_winner_enqueues_volume_issues(
     pre-seeded row is fresh.
     """
     await _seed_key(db_session)
-    await _seed_cv_issue_with_volume(
-        db_session, cv_id=345678, volume_cv_id=18166
-    )
+    await _seed_cv_issue_with_volume(db_session, cv_id=345678, volume_cv_id=18166)
 
-    xml = build_comicinfo_full(
-        series="Saga", number="1", year=2012, cv_issue_id=345678
-    )
+    xml = build_comicinfo_full(series="Saga", number="1", year=2012, cv_issue_id=345678)
     file_row = await _make_file_with_location(
         db_session,
         tmp_path,
@@ -365,9 +351,7 @@ async def test_stage1_winner_enqueues_volume_issues(
     )
 
     client = ComicVineClient(
-        rate_limiter=TokenBucketRateLimiter(
-            capacity=100, refill_rate_per_second=100.0
-        )
+        rate_limiter=TokenBucketRateLimiter(capacity=100, refill_rate_per_second=100.0)
     )
     rec = _RevalRecorder()
     cache = ComicVineCache(client, enqueue_revalidate=rec)
@@ -403,9 +387,7 @@ async def test_stage1_winner_skips_volume_issues_when_already_bulk_hydrated(
         db_session, cv_id=345678, volume_cv_id=18166, bulk_hydrated=True
     )
 
-    xml = build_comicinfo_full(
-        series="Saga", number="1", year=2012, cv_issue_id=345678
-    )
+    xml = build_comicinfo_full(series="Saga", number="1", year=2012, cv_issue_id=345678)
     file_row = await _make_file_with_location(
         db_session,
         tmp_path,
@@ -414,9 +396,7 @@ async def test_stage1_winner_skips_volume_issues_when_already_bulk_hydrated(
     )
 
     client = ComicVineClient(
-        rate_limiter=TokenBucketRateLimiter(
-            capacity=100, refill_rate_per_second=100.0
-        )
+        rate_limiter=TokenBucketRateLimiter(capacity=100, refill_rate_per_second=100.0)
     )
     rec = _RevalRecorder()
     cache = ComicVineCache(client, enqueue_revalidate=rec)
@@ -431,9 +411,7 @@ async def test_stage1_winner_skips_volume_issues_when_already_bulk_hydrated(
 
 
 @respx.mock
-async def test_pending_match_does_not_enqueue_volume_issues(
-    db_session, tmp_path: Path
-):
+async def test_pending_match_does_not_enqueue_volume_issues(db_session, tmp_path: Path):
     """A PENDING result has no confirmed winner, so the matcher
     must NOT enqueue ``volume_issues`` — that would defeat Lever 2
     by spawning hydration for a volume the human reviewer hasn't
@@ -453,14 +431,10 @@ async def test_pending_match_does_not_enqueue_volume_issues(
         comicinfo_status=ComicInfoStatus.NONE,
     )
     # CV returns no search results — Stage 2-4 lands in UNMATCHED.
-    respx.get(f"{BASE_URL}/search/").mock(
-        return_value=httpx.Response(200, json=_ok([]))
-    )
+    respx.get(f"{BASE_URL}/search/").mock(return_value=httpx.Response(200, json=_ok([])))
 
     client = ComicVineClient(
-        rate_limiter=TokenBucketRateLimiter(
-            capacity=100, refill_rate_per_second=100.0
-        )
+        rate_limiter=TokenBucketRateLimiter(capacity=100, refill_rate_per_second=100.0)
     )
     rec = _RevalRecorder()
     cache = ComicVineCache(client, enqueue_revalidate=rec)
@@ -471,9 +445,7 @@ async def test_pending_match_does_not_enqueue_volume_issues(
 
     assert result.status is not MatchStatus.AUTO
     # No volume was confirmed, so no volume_issues enqueue.
-    volume_issue_calls = [
-        c for c in rec.calls if c[0] == "volume_issues"
-    ]
+    volume_issue_calls = [c for c in rec.calls if c[0] == "volume_issues"]
     assert volume_issue_calls == []
 
 
@@ -534,9 +506,7 @@ async def test_stage3_no_search_results_unmatched(db_session, tmp_path: Path):
         comicinfo=None,
         comicinfo_status=ComicInfoStatus.NONE,
     )
-    respx.get(f"{BASE_URL}/search/").mock(
-        return_value=httpx.Response(200, json=_ok([]))
-    )
+    respx.get(f"{BASE_URL}/search/").mock(return_value=httpx.Response(200, json=_ok([])))
     client, cache = _fast_cache()
     try:
         result = await match_file(file_row.id, db_session, cache)
@@ -632,9 +602,7 @@ async def test_pending_when_year_is_off(db_session, tmp_path: Path):
 
 
 @respx.mock
-async def test_path_year_disambiguates_popular_long_running_series(
-    db_session, tmp_path: Path
-):
+async def test_path_year_disambiguates_popular_long_running_series(db_session, tmp_path: Path):
     """The Wonder Woman 1987 case — the user-reported PENDING bug
     where Stage 3 was suggesting the 1987 vol 2 of a long-running
     series for files clearly belonging to a more recent volume.
@@ -761,9 +729,7 @@ async def test_path_year_disambiguates_popular_long_running_series(
 
 
 @respx.mock
-async def test_search_pool_wide_enough_for_long_tail_volume(
-    db_session, tmp_path: Path
-):
+async def test_search_pool_wide_enough_for_long_tail_volume(db_session, tmp_path: Path):
     """The Wonder Woman New 52 case from the user-reported review queue:
     files with a year tag in the filename (parsed year 2012) were still
     matching to the 1987 Wonder Woman vol 2 because the 2011 New 52 vol
@@ -797,14 +763,11 @@ async def test_search_pool_wide_enough_for_long_tail_volume(
     # the tail. Filler volumes occupy positions 0-10 with implausibly
     # old start_years so they don't accidentally score better.
     search_results = [
-        {"id": 1000 + i, "name": "Wonder Woman", "start_year": str(1942 + i)}
-        for i in range(11)
+        {"id": 1000 + i, "name": "Wonder Woman", "start_year": str(1942 + i)} for i in range(11)
     ]
     # Position 12 (index 11): the year-aligned 2011 vol — what the
     # matcher should actually pick.
-    search_results.append(
-        {"id": 5678, "name": "Wonder Woman", "start_year": "2011"}
-    )
+    search_results.append({"id": 5678, "name": "Wonder Woman", "start_year": "2011"})
     respx.get(f"{BASE_URL}/search/").mock(
         return_value=httpx.Response(200, json=_ok(search_results))
     )
@@ -831,9 +794,7 @@ async def test_search_pool_wide_enough_for_long_tail_volume(
                                 "id": 90000 + stub["id"],
                                 "issue_number": "5",
                                 "name": "Issue 5",
-                                "cover_date": (
-                                    f"{int(stub['start_year']) + 1}-06-01"
-                                ),
+                                "cover_date": (f"{int(stub['start_year']) + 1}-06-01"),
                             }
                         ],
                     }
@@ -997,6 +958,7 @@ async def test_rate_limit_propagates_out_of_the_matcher(db_session, tmp_path: Pa
         await client.aclose()
     # No row written — the file stays eligible for a clean retry.
     assert await db_session.get(FileMatch, file_row.id) is None
+
 
 # Pure-function helper tests live in ``tests/test_matcher_helpers.py``
 # (sync, no pytest-asyncio mark) so they don't trip the module-level

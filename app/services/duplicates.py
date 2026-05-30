@@ -194,9 +194,7 @@ class HashGroup:
     excluded_from_matching: bool
 
 
-async def list_hash_duplicates(
-    db: AsyncSession, *, limit: int = 200
-) -> list[HashGroup]:
+async def list_hash_duplicates(db: AsyncSession, *, limit: int = 200) -> list[HashGroup]:
     """Files whose ``file_locations`` includes more than one current
     (i.e., not ``missing_since``-set) row.
 
@@ -228,21 +226,21 @@ async def list_hash_duplicates(
     # Pull the file rows + their current locations in two batched queries.
     files_by_id: dict[uuid.UUID, File] = {
         f.id: f
-        for f in (
-            await db.execute(
-                select(File).where(File.id.in_(file_ids))
-            )
-        ).scalars().all()
+        for f in (await db.execute(select(File).where(File.id.in_(file_ids)))).scalars().all()
     }
     locations_by_file: dict[uuid.UUID, list[FileLocation]] = {}
     locs = (
-        await db.execute(
-            select(FileLocation)
-            .where(FileLocation.file_id.in_(file_ids))
-            .where(FileLocation.missing_since.is_(None))
-            .order_by(FileLocation.path)
+        (
+            await db.execute(
+                select(FileLocation)
+                .where(FileLocation.file_id.in_(file_ids))
+                .where(FileLocation.missing_since.is_(None))
+                .order_by(FileLocation.path)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for loc in locs:
         locations_by_file.setdefault(loc.file_id, []).append(loc)
 
@@ -368,9 +366,7 @@ _RESOLVED_STATUSES = (
 )
 
 
-async def list_issue_duplicates(
-    db: AsyncSession, *, limit: int = 200
-) -> IssueDuplicateListing:
+async def list_issue_duplicates(db: AsyncSession, *, limit: int = 200) -> IssueDuplicateListing:
     """Issues that have more than one resolved file claiming them.
 
     Capped at ``limit`` groups, sorted by file-count descending so the
@@ -403,9 +399,7 @@ async def list_issue_duplicates(
     )
     multi_rows = (await db.execute(multi_stmt)).all()
     if not multi_rows:
-        return IssueDuplicateListing(
-            groups=[], deferred_count=0, deferred_volume_cv_ids=[]
-        )
+        return IssueDuplicateListing(groups=[], deferred_count=0, deferred_volume_cv_ids=[])
 
     issue_cv_ids = [r.issue_cv_id for r in multi_rows]
 
@@ -443,26 +437,20 @@ async def list_issue_duplicates(
     # Issue + volume context for display.
     issues_by_id: dict[int, CvIssue] = {
         i.cv_id: i
-        for i in (
-            await db.execute(
-                select(CvIssue).where(CvIssue.cv_id.in_(issue_cv_ids))
-            )
-        ).scalars().all()
+        for i in (await db.execute(select(CvIssue).where(CvIssue.cv_id.in_(issue_cv_ids))))
+        .scalars()
+        .all()
     }
-    volume_ids = {
-        i.volume_cv_id
-        for i in issues_by_id.values()
-        if i.volume_cv_id is not None
-    }
+    volume_ids = {i.volume_cv_id for i in issues_by_id.values() if i.volume_cv_id is not None}
     volumes_by_id: dict[int, CvVolume] = {}
     if volume_ids:
         volumes_by_id = {
             v.cv_id: v
             for v in (
-                await db.execute(
-                    select(CvVolume).where(CvVolume.cv_id.in_(list(volume_ids)))
-                )
-            ).scalars().all()
+                await db.execute(select(CvVolume).where(CvVolume.cv_id.in_(list(volume_ids))))
+            )
+            .scalars()
+            .all()
         }
 
     # Bucket files by issue, then hand each bucket off to the shared
@@ -565,16 +553,10 @@ def _build_issue_group(
         )
         for s, f in scored
     ]
-    cover_url = (
-        cv_image_url(issue.raw_payload, "thumb")
-        if issue is not None
-        else None
-    )
+    cover_url = cv_image_url(issue.raw_payload, "thumb") if issue is not None else None
     if cover_url is None:
         deferred_vol = (
-            issue.volume_cv_id
-            if issue is not None and issue.volume_cv_id is not None
-            else None
+            issue.volume_cv_id if issue is not None and issue.volume_cv_id is not None else None
         )
         return None, deferred_vol
     return (
@@ -592,9 +574,7 @@ def _build_issue_group(
     )
 
 
-async def get_issue_duplicate_group(
-    db: AsyncSession, issue_cv_id: int
-) -> IssueGroup | None:
+async def get_issue_duplicate_group(db: AsyncSession, issue_cv_id: int) -> IssueGroup | None:
     """The single-issue counterpart to ``list_issue_duplicates``.
 
     Returns the ``IssueGroup`` for one specific CV issue when it has
@@ -658,9 +638,7 @@ async def get_issue_duplicate_group(
 # ---- Admin actions ----------------------------------------------------
 
 
-async def mark_file_excluded(
-    db: AsyncSession, file_id: uuid.UUID
-) -> bool:
+async def mark_file_excluded(db: AsyncSession, file_id: uuid.UUID) -> bool:
     """Flip ``files.excluded_from_matching`` to True.
 
     The matcher's existing guard at the top of ``match_file`` returns
@@ -686,30 +664,24 @@ async def mark_file_excluded(
 
 
 async def count_hash_duplicate_groups(db: AsyncSession) -> int:
-    stmt = (
-        select(func.count())
-        .select_from(
-            select(FileLocation.file_id)
-            .where(FileLocation.missing_since.is_(None))
-            .group_by(FileLocation.file_id)
-            .having(func.count(FileLocation.id) > 1)
-            .subquery()
-        )
+    stmt = select(func.count()).select_from(
+        select(FileLocation.file_id)
+        .where(FileLocation.missing_since.is_(None))
+        .group_by(FileLocation.file_id)
+        .having(func.count(FileLocation.id) > 1)
+        .subquery()
     )
     return (await db.execute(stmt)).scalar_one() or 0
 
 
 async def count_issue_duplicate_groups(db: AsyncSession) -> int:
-    stmt = (
-        select(func.count())
-        .select_from(
-            select(FileMatch.issue_cv_id)
-            .where(FileMatch.issue_cv_id.is_not(None))
-            .where(FileMatch.status.in_(_RESOLVED_STATUSES))
-            .group_by(FileMatch.issue_cv_id)
-            .having(func.count(FileMatch.file_id) > 1)
-            .subquery()
-        )
+    stmt = select(func.count()).select_from(
+        select(FileMatch.issue_cv_id)
+        .where(FileMatch.issue_cv_id.is_not(None))
+        .where(FileMatch.status.in_(_RESOLVED_STATUSES))
+        .group_by(FileMatch.issue_cv_id)
+        .having(func.count(FileMatch.file_id) > 1)
+        .subquery()
     )
     return (await db.execute(stmt)).scalar_one() or 0
 

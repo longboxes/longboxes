@@ -100,9 +100,7 @@ def parse_filename(filename: str | Path) -> ParsedFilename:
 _TRAILING_GROUP_RE = re.compile(r"\s*[(\[][^()\[\]]*[)\]]\s*$")
 
 
-def _extract_long_series(
-    basename: str, issue_number: str | None, year: int | None
-) -> str | None:
+def _extract_long_series(basename: str, issue_number: str | None, year: int | None) -> str | None:
     """Return the series prefix of ``basename`` up to the issue marker.
 
     Used as a fallback search term when comicfn2dict's ``series``

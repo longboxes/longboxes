@@ -85,7 +85,7 @@ class LibraryVolumeRow:
     year: int | None
     publisher_name: str | None
     count_of_issues: int | None  # CV's total
-    owned_count: int             # files we have matched into this volume
+    owned_count: int  # files we have matched into this volume
     cover_url: str | None
     # True for cv_volumes rows that were inserted as FK placeholders by
     # ``_upsert_volume_stub`` (typically because Stage 1 matched an issue
@@ -173,10 +173,10 @@ class ArcSiblingLink:
 
     arc: ArcCredit
     issue_cv_id: int  # the sibling issue to jump to
-    issue_name: str | None = None      # from the arc payload's member dict
-    issue_number: str | None = None    # from cv_issues, if we have it
-    volume_name: str | None = None     # from cv_volumes, if we have it
-    volume_year: int | None = None     # from cv_volumes, if we have it
+    issue_name: str | None = None  # from the arc payload's member dict
+    issue_number: str | None = None  # from cv_issues, if we have it
+    volume_name: str | None = None  # from cv_volumes, if we have it
+    volume_year: int | None = None  # from cv_volumes, if we have it
 
 
 @dataclass
@@ -379,9 +379,7 @@ class VolumeDetail:
         """Publication status — ongoing / complete / cancelled /
         unfinished — derived from the volume's scraped CV themes, or
         None when no status theme is present."""
-        return volume_status_from_themes(
-            getattr(self.volume, "themes", None)
-        )
+        return volume_status_from_themes(getattr(self.volume, "themes", None))
 
 
 # Solid colors for the per-row arc stripes. Mid-saturation so the bars
@@ -688,11 +686,7 @@ async def list_library_volumes(
             func.count(func.distinct(FileMatch.issue_cv_id)).label("owned_count"),
         )
         .join(FileMatch, FileMatch.issue_cv_id == CvIssue.cv_id)
-        .where(
-            FileMatch.status.in_(
-                (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-            )
-        )
+        .where(FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)))
         .group_by(CvIssue.volume_cv_id)
         .subquery()
     )
@@ -706,9 +700,7 @@ async def list_library_volumes(
         year_subq = (
             select(
                 CvIssue.volume_cv_id.label("vid"),
-                func.max(
-                    func.extract("year", CvIssue.cover_date)
-                ).label("max_year"),
+                func.max(func.extract("year", CvIssue.cover_date)).label("max_year"),
             )
             .where(CvIssue.cover_date.is_not(None))
             .group_by(CvIssue.volume_cv_id)
@@ -774,9 +766,7 @@ async def list_library_volumes(
         owned_per_volume.c.volume_cv_id == CvVolume.cv_id,
     )
     if year_subq is not None:
-        keys_stmt = keys_stmt.outerjoin(
-            year_subq, year_subq.c.vid == CvVolume.cv_id
-        )
+        keys_stmt = keys_stmt.outerjoin(year_subq, year_subq.c.vid == CvVolume.cv_id)
     for cond in conditions:
         keys_stmt = keys_stmt.where(cond)
 
@@ -790,9 +780,7 @@ async def list_library_volumes(
             owned_count=owned,
             count_of_issues=count,
         )
-        for cv_id, name, year, count, owned in (
-            await db.execute(keys_stmt)
-        ).all()
+        for cv_id, name, year, count, owned in (await db.execute(keys_stmt)).all()
     ]
 
     # ---- Format facet — classify and filter, when requested ---------
@@ -812,9 +800,7 @@ async def list_library_volumes(
             CvVolume.raw_payload["first_issue"]["name"].astext,
         ).where(CvVolume.cv_id.in_([k.cv_id for k in keys]))
         matching: set[int] = set()
-        for cv_id, name, count, deck, desc, first_name in (
-            await db.execute(fmt_stmt)
-        ).all():
+        for cv_id, name, count, deck, desc, first_name in (await db.execute(fmt_stmt)).all():
             if (
                 classify_volume_format(
                     name=name,
@@ -833,11 +819,7 @@ async def list_library_volumes(
     # publisher, ``has_missing_only`` needs a CV issue total a local
     # volume doesn't have, and the format facet is CV-only — in any of
     # those cases local volumes are simply absent from the results.
-    if (
-        f.publisher_cv_id is None
-        and not f.has_missing_only
-        and f.format is None
-    ):
+    if f.publisher_cv_id is None and not f.has_missing_only and f.format is None:
         keys.extend(await _local_library_keys(db, f))
 
     # ---- Merge: sort the union, then paginate ------------------------
@@ -849,24 +831,17 @@ async def list_library_volumes(
     cv_ids = [k.cv_id for k in page if k.kind == "cv"]
     local_ids = [k.local_id for k in page if k.kind == "local"]
     owned_by_cv = {k.cv_id: k.owned_count for k in page if k.kind == "cv"}
-    owned_by_local = {
-        k.local_id: k.owned_count for k in page if k.kind == "local"
-    }
+    owned_by_local = {k.local_id: k.owned_count for k in page if k.kind == "local"}
 
     cv_rows: dict[int, LibraryVolumeRow] = {}
     if cv_ids:
         hstmt = (
             select(CvVolume, CvPublisher.name.label("publisher_name"))
-            .outerjoin(
-                CvPublisher, CvPublisher.cv_id == CvVolume.publisher_cv_id
-            )
+            .outerjoin(CvPublisher, CvPublisher.cv_id == CvVolume.publisher_cv_id)
             .where(CvVolume.cv_id.in_(cv_ids))
         )
         for vol, publisher_name in (await db.execute(hstmt)).all():
-            is_stub = (
-                isinstance(vol.raw_payload, dict)
-                and vol.raw_payload.get("_stub") is True
-            )
+            is_stub = isinstance(vol.raw_payload, dict) and vol.raw_payload.get("_stub") is True
             cv_rows[vol.cv_id] = LibraryVolumeRow(
                 cv_id=vol.cv_id,
                 name=vol.name,
@@ -902,9 +877,7 @@ async def list_library_volumes(
                 owned_count=owned_by_local.get(lv.id, 0),
                 # A local cover is the matched file's own first page,
                 # served by the (Phase 11C non-admin) file-cover route.
-                cover_url=(
-                    f"/review/file/{file_id}/cover" if file_id else None
-                ),
+                cover_url=(f"/review/file/{file_id}/cover" if file_id else None),
                 is_stub=False,
                 kind="local",
                 local_id=lv.id,
@@ -922,15 +895,9 @@ async def list_library_volumes(
                     func.count(func.distinct(FileMatch.issue_cv_id)),
                 )
                 .join(FileMatch, FileMatch.issue_cv_id == CvIssue.cv_id)
-                .join(
-                    ReadProgress, ReadProgress.file_id == FileMatch.file_id
-                )
+                .join(ReadProgress, ReadProgress.file_id == FileMatch.file_id)
                 .where(CvIssue.volume_cv_id.in_(cv_ids))
-                .where(
-                    FileMatch.status.in_(
-                        (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                    )
-                )
+                .where(FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)))
                 .where(ReadProgress.user_id == user_id)
                 .where(ReadProgress.finished_at.is_not(None))
                 .group_by(CvIssue.volume_cv_id)
@@ -947,9 +914,7 @@ async def list_library_volumes(
                     func.count(func.distinct(FileMatch.local_issue_id)),
                 )
                 .join(FileMatch, FileMatch.local_issue_id == LocalIssue.id)
-                .join(
-                    ReadProgress, ReadProgress.file_id == FileMatch.file_id
-                )
+                .join(ReadProgress, ReadProgress.file_id == FileMatch.file_id)
                 .where(LocalIssue.local_volume_id.in_(local_ids))
                 .where(FileMatch.status == MatchStatus.LOCAL.value)
                 .where(ReadProgress.user_id == user_id)
@@ -965,19 +930,13 @@ async def list_library_volumes(
     # (e.g. deleted between the key scan and now) is skipped.
     out: list[LibraryVolumeRow] = []
     for k in page:
-        row = (
-            cv_rows.get(k.cv_id)
-            if k.kind == "cv"
-            else local_rows.get(k.local_id)
-        )
+        row = cv_rows.get(k.cv_id) if k.kind == "cv" else local_rows.get(k.local_id)
         if row is not None:
             out.append(row)
     return out, total
 
 
-async def _local_library_keys(
-    db: AsyncSession, f: LibraryFilters
-) -> list[_LibKey]:
+async def _local_library_keys(db: AsyncSession, f: LibraryFilters) -> list[_LibKey]:
     """Sort keys for the local-volume side of ``list_library_volumes``.
 
     Applies the name / year filters that make sense for a local volume;
@@ -988,9 +947,7 @@ async def _local_library_keys(
     local_owned = (
         select(
             LocalIssue.local_volume_id.label("lv_id"),
-            func.count(func.distinct(FileMatch.local_issue_id)).label(
-                "owned_count"
-            ),
+            func.count(func.distinct(FileMatch.local_issue_id)).label("owned_count"),
         )
         .join(FileMatch, FileMatch.local_issue_id == LocalIssue.id)
         .where(FileMatch.status == MatchStatus.LOCAL.value)
@@ -1012,9 +969,7 @@ async def _local_library_keys(
             stmt = stmt.where(~first.between("a", "z"))
         else:
             letter = f.name_starts_with[:1].lower()
-            stmt = stmt.where(
-                func.lower(LocalVolume.name).like(f"{letter}%")
-            )
+            stmt = stmt.where(func.lower(LocalVolume.name).like(f"{letter}%"))
     if f.name_query and f.name_query.strip():
         q = f.name_query.strip()
         escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -1083,11 +1038,7 @@ async def get_hydrated_library_rows(
             func.count(func.distinct(FileMatch.issue_cv_id)).label("owned_count"),
         )
         .join(FileMatch, FileMatch.issue_cv_id == CvIssue.cv_id)
-        .where(
-            FileMatch.status.in_(
-                (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-            )
-        )
+        .where(FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)))
         .group_by(CvIssue.volume_cv_id)
         .subquery()
     )
@@ -1109,10 +1060,7 @@ async def get_hydrated_library_rows(
         # ``_stub`` marker means the row is still a placeholder. The
         # auto-refresh client just leaves these in its pending set
         # and asks again on the next poll tick.
-        is_stub = (
-            isinstance(vol.raw_payload, dict)
-            and vol.raw_payload.get("_stub") is True
-        )
+        is_stub = isinstance(vol.raw_payload, dict) and vol.raw_payload.get("_stub") is True
         if is_stub:
             continue
         out.append(
@@ -1145,11 +1093,7 @@ async def list_publishers_in_library(
     owned_volume_ids = (
         select(CvIssue.volume_cv_id)
         .join(FileMatch, FileMatch.issue_cv_id == CvIssue.cv_id)
-        .where(
-            FileMatch.status.in_(
-                (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-            )
-        )
+        .where(FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)))
     )
     publisher_ids = (
         select(CvVolume.publisher_cv_id)
@@ -1296,17 +1240,13 @@ async def get_volume_detail(
             elif credit_kind == "creator":
                 entity = await cv_cache.get_person(db, credit_entity_cv_id)
             elif credit_kind == "character":
-                entity = await cv_cache.get_character(
-                    db, credit_entity_cv_id
-                )
+                entity = await cv_cache.get_character(db, credit_entity_cv_id)
         except ComicVineError:
             entity = None
         if entity is not None:
             entity_payload = entity.raw_payload or {}
             credited_ids = _credited_issue_ids(entity_payload)
-            credit_entity_name = (
-                entity.name or entity_payload.get("name") or ""
-            )
+            credit_entity_name = entity.name or entity_payload.get("name") or ""
         else:
             credit_kind = None  # unresolved → no filter
 
@@ -1319,14 +1259,10 @@ async def get_volume_detail(
         .join(CvIssue, CvIssue.cv_id == FileMatch.issue_cv_id)
         .where(
             CvIssue.volume_cv_id == cv_id,
-            FileMatch.status.in_(
-                (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-            ),
+            FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)),
         )
     )
-    owned_issue_count = (
-        (await db.execute(owned_issue_count_stmt)).scalar() or 0
-    )
+    owned_issue_count = (await db.execute(owned_issue_count_stmt)).scalar() or 0
 
     # Reading progress: distinct issues the user has finished in this
     # volume — the reading ring's numerator. Mirrors the owned-count
@@ -1338,14 +1274,10 @@ async def get_volume_detail(
             await db.execute(
                 select(func.count(func.distinct(FileMatch.issue_cv_id)))
                 .join(CvIssue, CvIssue.cv_id == FileMatch.issue_cv_id)
-                .join(
-                    ReadProgress, ReadProgress.file_id == FileMatch.file_id
-                )
+                .join(ReadProgress, ReadProgress.file_id == FileMatch.file_id)
                 .where(
                     CvIssue.volume_cv_id == cv_id,
-                    FileMatch.status.in_(
-                        (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                    ),
+                    FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)),
                     ReadProgress.user_id == user_id,
                     ReadProgress.finished_at.is_not(None),
                 )
@@ -1359,9 +1291,7 @@ async def get_volume_detail(
             # boolean: do we have a matched file pointing at this issue?
             func.coalesce(
                 func.bool_or(
-                    FileMatch.status.in_(
-                        (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                    )
+                    FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value))
                 ),
                 False,
             ).label("owned"),
@@ -1380,9 +1310,7 @@ async def get_volume_detail(
     credit: CreditFilter | None = None
     if credited_ids is not None and credit_kind is not None:
         volume_total = len(issue_rows)
-        issue_rows = [
-            row for row in issue_rows if row[0].cv_id in credited_ids
-        ]
+        issue_rows = [row for row in issue_rows if row[0].cv_id in credited_ids]
         credit = CreditFilter(
             kind=credit_kind,
             cv_id=credit_entity_cv_id,
@@ -1412,11 +1340,13 @@ async def get_volume_detail(
                 if aid is None or not raw_name:
                     continue
                 primary_book, clean_name = parse_arc_name(raw_name)
-                issue_arc_credits.append(ArcCredit(
-                    cv_id=int(aid),
-                    name=clean_name,
-                    primary_book=primary_book,
-                ))
+                issue_arc_credits.append(
+                    ArcCredit(
+                        cv_id=int(aid),
+                        name=clean_name,
+                        primary_book=primary_book,
+                    )
+                )
                 if aid not in arc_names:
                     arc_names[aid] = clean_name
                     arc_primary_books[aid] = primary_book
@@ -1451,8 +1381,7 @@ async def get_volume_detail(
     if credit is not None:
         owned_issue_count = sum(1 for row in issues if row.owned)
         finished_issue_count = sum(
-            1 for row in issues
-            if row.progress is not None and row.progress.finished
+            1 for row in issues if row.progress is not None and row.progress.finished
         )
 
     # ---- Arc-driven fill-in + boundary arrows + gallery shelves --------
@@ -1508,10 +1437,7 @@ async def get_volume_detail(
             if pos > 0:
                 prev_member = members[pos - 1]
                 prev_id = prev_member.get("id")
-                if (
-                    prev_id is not None
-                    and int(prev_id) not in this_volume_issue_ids
-                ):
+                if prev_id is not None and int(prev_id) not in this_volume_issue_ids:
                     row.prev_arc_links.append(
                         ArcSiblingLink(
                             arc=arc_credit,
@@ -1522,10 +1448,7 @@ async def get_volume_detail(
             if pos + 1 < len(members):
                 next_member = members[pos + 1]
                 next_id = next_member.get("id")
-                if (
-                    next_id is not None
-                    and int(next_id) not in this_volume_issue_ids
-                ):
+                if next_id is not None and int(next_id) not in this_volume_issue_ids:
                     row.next_arc_links.append(
                         ArcSiblingLink(
                             arc=arc_credit,
@@ -1611,12 +1534,8 @@ async def get_volume_detail(
         )
 
     # Unaffiliated: issues belonging to none of the volume's arcs.
-    in_any_arc_ids = {
-        row.cv_id for shelf in gallery_shelves for row in shelf.issues
-    }
-    gallery_unaffiliated = [
-        row for row in issues if row.cv_id not in in_any_arc_ids
-    ]
+    in_any_arc_ids = {row.cv_id for shelf in gallery_shelves for row in shelf.issues}
+    gallery_unaffiliated = [row for row in issues if row.cv_id not in in_any_arc_ids]
 
     # Sort the flat issues list into volume order. The Arcs view's
     # per-arc shelves keep their CV-reading order (set above); only the
@@ -1674,11 +1593,7 @@ async def get_volume_detail(
                     pos_map = arc_pos_by_aid.get(aid) or {}
                     prev_pos = pos_map.get(prev_issue.cv_id) if prev_issue else None
                     curr_pos = pos_map.get(issue.cv_id)
-                    if (
-                        prev_pos is not None
-                        and curr_pos is not None
-                        and curr_pos != prev_pos + 1
-                    ):
+                    if prev_pos is not None and curr_pos is not None and curr_pos != prev_pos + 1:
                         split_here = True
                         break
         if split_here:
@@ -1721,9 +1636,7 @@ async def get_volume_detail(
             if aid in seg_arc_ids and aid in arc_credit_for_aid
         ]
         prev_seg_last_id: int | None = (
-            gallery_segments[seg_idx - 1].issues[-1].cv_id
-            if seg_idx > 0
-            else None
+            gallery_segments[seg_idx - 1].issues[-1].cv_id if seg_idx > 0 else None
         )
         next_seg_first_id: int | None = (
             gallery_segments[seg_idx + 1].issues[0].cv_id
@@ -1800,9 +1713,7 @@ async def get_volume_detail(
         )
         sib_meta: dict[int, tuple[str | None, str | None, int | None]] = {
             int(cv_id): (issue_number, volume_name, volume_year)
-            for cv_id, issue_number, volume_name, volume_year in (
-                await db.execute(sib_stmt)
-            ).all()
+            for cv_id, issue_number, volume_name, volume_year in (await db.execute(sib_stmt)).all()
         }
 
         def _enrich(link: ArcSiblingLink) -> None:
@@ -1888,13 +1799,9 @@ async def get_volume_detail(
             -1,
         )
     if target_idx < 0:
-        target_idx = next(
-            (i for i, row in enumerate(issues) if row.owned), -1
-        )
+        target_idx = next((i for i, row in enumerate(issues) if row.owned), -1)
     initial_window_start = (
-        (target_idx // initial_window_size) * initial_window_size
-        if target_idx >= 0
-        else 0
+        (target_idx // initial_window_size) * initial_window_size if target_idx >= 0 else 0
     )
 
     # Build the List view's arc rail for the requested window. When
@@ -1910,15 +1817,9 @@ async def get_volume_detail(
 
         in_volume_issue_ids: set[int] = {issue.cv_id for issue in issues}
         effective_start = (
-            rail_window_start
-            if rail_window_start is not None
-            else initial_window_start
+            rail_window_start if rail_window_start is not None else initial_window_start
         )
-        effective_size = (
-            rail_window_size
-            if rail_window_size is not None
-            else initial_window_size
-        )
+        effective_size = rail_window_size if rail_window_size is not None else initial_window_size
         # Clamp to valid bounds — out-of-range start defaults to 0.
         effective_start = max(0, min(effective_start, len(issues)))
         effective_size = max(0, effective_size)
@@ -1971,8 +1872,7 @@ async def get_volume_detail(
         def _shelf_height_for(in_window_count: int) -> int:
             cover_rows = max(
                 1,
-                (in_window_count + ARCS_COVERS_PER_GRID_ROW - 1)
-                // ARCS_COVERS_PER_GRID_ROW,
+                (in_window_count + ARCS_COVERS_PER_GRID_ROW - 1) // ARCS_COVERS_PER_GRID_ROW,
             )
             return (
                 ARCS_SHELF_HEADER_PX
@@ -1983,16 +1883,10 @@ async def get_volume_detail(
 
         arcs_content_px = 0
         for shelf in gallery_shelves:
-            in_win = sum(
-                1 for i in shelf.issues
-                if window_lo <= i.volume_idx < window_hi
-            )
+            in_win = sum(1 for i in shelf.issues if window_lo <= i.volume_idx < window_hi)
             if in_win:
                 arcs_content_px += _shelf_height_for(in_win)
-        un_in_win = sum(
-            1 for i in gallery_unaffiliated
-            if window_lo <= i.volume_idx < window_hi
-        )
+        un_in_win = sum(1 for i in gallery_unaffiliated if window_lo <= i.volume_idx < window_hi)
         if un_in_win:
             arcs_content_px += _shelf_height_for(un_in_win)
 
@@ -2026,9 +1920,9 @@ async def get_volume_detail(
         from app.services.rail import build_gallery_rail
 
         visible_segments_for_rail = [
-            seg for seg in gallery_segments
-            if seg.first_volume_idx < window_hi
-            and seg.last_volume_idx >= window_lo
+            seg
+            for seg in gallery_segments
+            if seg.first_volume_idx < window_hi and seg.last_volume_idx >= window_lo
         ]
         if visible_segments_for_rail:
             gallery_rail = build_gallery_rail(
@@ -2150,11 +2044,13 @@ async def get_issue_detail(
         if a.get("id") is None:
             continue
         primary_book, clean_name = parse_arc_name(a.get("name") or "")
-        story_arcs.append(CreditRow(
-            cv_id=int(a["id"]),
-            name=clean_name,
-            primary_book=primary_book,
-        ))
+        story_arcs.append(
+            CreditRow(
+                cv_id=int(a["id"]),
+                name=clean_name,
+                primary_book=primary_book,
+            )
+        )
     teams = [
         CreditRow(cv_id=int(t["id"]), name=t.get("name") or "")
         for t in (payload.get("team_credits") or [])
@@ -2182,9 +2078,7 @@ async def get_issue_detail(
         .join(FileLocation, FileLocation.file_id == FileMatch.file_id)
         .where(
             FileMatch.issue_cv_id == cv_id,
-            FileMatch.status.in_(
-                (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-            ),
+            FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)),
             FileLocation.missing_since.is_(None),
         )
         .order_by(FileLocation.path)
@@ -2202,9 +2096,7 @@ async def get_issue_detail(
     owned_stmt = select(
         func.coalesce(
             func.bool_or(
-                FileMatch.status.in_(
-                    (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                )
+                FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value))
             ),
             False,
         )
@@ -2230,9 +2122,7 @@ async def get_issue_detail(
                 CvIssue,
                 func.coalesce(
                     func.bool_or(
-                        FileMatch.status.in_(
-                            (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                        )
+                        FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value))
                     ),
                     False,
                 ).label("owned"),
@@ -2293,9 +2183,7 @@ async def get_issue_detail(
         for arc_idx, arc_credit in enumerate(story_arcs):
             color = arc_hex_for_index(arc_idx)
             try:
-                arc_payload = await cv_cache.get_story_arc(
-                    db, arc_credit.cv_id
-                )
+                arc_payload = await cv_cache.get_story_arc(db, arc_credit.cv_id)
             except ComicVineError:
                 # Skip arcs we can't fetch — the rail can render the
                 # rest without crashing.
@@ -2308,7 +2196,8 @@ async def get_issue_detail(
             members = (arc_payload.raw_payload or {}).get("issues") or []
             pos = next(
                 (
-                    i for i, m in enumerate(members)
+                    i
+                    for i, m in enumerate(members)
                     if m.get("id") is not None and int(m["id"]) == cv_id
                 ),
                 None,
@@ -2333,10 +2222,7 @@ async def get_issue_detail(
                 target_id = int(mid_raw)
                 target_issue = await db.get(CvIssue, target_id)
                 # Skip in-volume members — they're not "elsewhere".
-                if (
-                    target_issue is not None
-                    and target_issue.volume_cv_id == issue.volume_cv_id
-                ):
+                if target_issue is not None and target_issue.volume_cv_id == issue.volume_cv_id:
                     return None
                 branch = IssueArcBranch(
                     arc=_arc,
@@ -2348,9 +2234,7 @@ async def get_issue_detail(
                 if target_issue is not None:
                     branch.target_issue_number = target_issue.issue_number
                     if target_issue.volume_cv_id is not None:
-                        target_vol = await db.get(
-                            CvVolume, target_issue.volume_cv_id
-                        )
+                        target_vol = await db.get(CvVolume, target_issue.volume_cv_id)
                         if target_vol is not None:
                             branch.target_volume_name = target_vol.name
                             branch.target_volume_year = target_vol.year
@@ -2474,8 +2358,8 @@ class ArcVolumeShelf:
 @dataclass
 class ArcDetail:
     arc: Any  # CvStoryArc — kept loose to avoid circular type pressure
-    name: str                       # CV name with the quoted-book prefix stripped
-    primary_book: str | None        # parsed-out prefix, if any
+    name: str  # CV name with the quoted-book prefix stripped
+    primary_book: str | None  # parsed-out prefix, if any
     description: str | None
     # Short one-line summary from CV's ``deck`` field. See VolumeDetail.deck.
     deck: str | None
@@ -2527,9 +2411,7 @@ async def get_arc_detail(
     banner_url = cv_image_url(raw_payload, "banner")
     publisher_payload = raw_payload.get("publisher") or {}
     publisher_cv_id = (
-        int(publisher_payload["id"])
-        if publisher_payload.get("id") is not None
-        else None
+        int(publisher_payload["id"]) if publisher_payload.get("id") is not None else None
     )
 
     # Members are kept in CV's order — that's the arc's reading order.
@@ -2548,9 +2430,7 @@ async def get_arc_detail(
         # cleanly yields False when no match exists.
         owned_expr = func.coalesce(
             func.bool_or(
-                FileMatch.status.in_(
-                    (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                )
+                FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value))
             ),
             False,
         ).label("owned")
@@ -2610,20 +2490,20 @@ async def get_arc_detail(
         else:
             # Fall back to the arc payload's nested volume summary.
             nested_volume = m.get("volume") or {}
-            issues.append(ArcIssueRow(
-                cv_id=mid,
-                issue_number=m.get("issue_number"),
-                name=m.get("name"),
-                cover_url=None,
-                cover_date=None,
-                owned=False,
-                volume_cv_id=(
-                    int(nested_volume["id"]) if nested_volume.get("id") else None
-                ),
-                volume_name=nested_volume.get("name"),
-                volume_year=safe_int(nested_volume.get("start_year")),
-                arc_idx=arc_idx,
-            ))
+            issues.append(
+                ArcIssueRow(
+                    cv_id=mid,
+                    issue_number=m.get("issue_number"),
+                    name=m.get("name"),
+                    cover_url=None,
+                    cover_date=None,
+                    owned=False,
+                    volume_cv_id=(int(nested_volume["id"]) if nested_volume.get("id") else None),
+                    volume_name=nested_volume.get("name"),
+                    volume_year=safe_int(nested_volume.get("start_year")),
+                    arc_idx=arc_idx,
+                )
+            )
 
     # Build per-volume shelves for the gallery view. Keyed by
     # ``volume_cv_id`` so members from the same volume cluster
@@ -2658,16 +2538,12 @@ async def get_arc_detail(
     # Classify each shelf's volume (ongoing / limited / one_shot /
     # collection) from the cached cv_volumes row. One batch query;
     # volumes the arc touches that we haven't ingested get no badge.
-    shelf_volume_ids = {
-        s.volume_cv_id for s in volume_shelves if s.volume_cv_id is not None
-    }
+    shelf_volume_ids = {s.volume_cv_id for s in volume_shelves if s.volume_cv_id is not None}
     if shelf_volume_ids:
         fmt_by_id = {
             v.cv_id: classify_cv_volume(v)
             for v in (
-                await db.execute(
-                    select(CvVolume).where(CvVolume.cv_id.in_(shelf_volume_ids))
-                )
+                await db.execute(select(CvVolume).where(CvVolume.cv_id.in_(shelf_volume_ids)))
             ).scalars()
         }
         for shelf in volume_shelves:
@@ -2712,9 +2588,9 @@ class PublisherArcRow:
     """
 
     cv_id: int
-    name: str                  # cleaned (quoted-book prefix stripped)
+    name: str  # cleaned (quoted-book prefix stripped)
     primary_book: str | None
-    cover_url: str | None      # None until the arc is hydrated locally
+    cover_url: str | None  # None until the arc is hydrated locally
     is_hydrated: bool = False  # True if we have a CvStoryArc row in DB
 
 
@@ -2801,9 +2677,7 @@ async def get_publisher_detail(
         .join(FileMatch, FileMatch.issue_cv_id == CvIssue.cv_id)
         .where(
             CvVolume.publisher_cv_id == cv_id,
-            FileMatch.status.in_(
-                (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-            ),
+            FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)),
         )
     )
     library_volume_count = int((await db.execute(count_stmt)).scalar() or 0)
@@ -2830,11 +2704,13 @@ async def get_publisher_detail(
             continue
         raw_name = stub.get("name") or ""
         primary_book, clean_name = parse_arc_name(raw_name)
-        parsed_stubs.append({
-            "cv_id": int(sid),
-            "primary_book": primary_book,
-            "clean_name": clean_name,
-        })
+        parsed_stubs.append(
+            {
+                "cv_id": int(sid),
+                "primary_book": primary_book,
+                "clean_name": clean_name,
+            }
+        )
     parsed_stubs.sort(
         key=lambda s: (
             s["clean_name"].lower(),
@@ -2851,9 +2727,9 @@ async def get_publisher_detail(
         needle = arcs_query.strip().lower()
         if needle:
             parsed_stubs = [
-                s for s in parsed_stubs
-                if needle in s["clean_name"].lower()
-                or needle in (s["primary_book"] or "").lower()
+                s
+                for s in parsed_stubs
+                if needle in s["clean_name"].lower() or needle in (s["primary_book"] or "").lower()
             ]
 
     arcs_total = len(parsed_stubs)
@@ -2880,13 +2756,15 @@ async def get_publisher_detail(
             if arc_row.name:
                 primary_book, name = parse_arc_name(arc_row.name)
             cover_url = cv_image_url(arc_row.raw_payload, "medium")
-        arcs.append(PublisherArcRow(
-            cv_id=aid,
-            name=name,
-            primary_book=primary_book,
-            cover_url=cover_url,
-            is_hydrated=is_hydrated,
-        ))
+        arcs.append(
+            PublisherArcRow(
+                cv_id=aid,
+                name=name,
+                primary_book=primary_book,
+                cover_url=cover_url,
+                is_hydrated=is_hydrated,
+            )
+        )
 
     return PublisherDetail(
         publisher=publisher,
@@ -2923,22 +2801,22 @@ async def get_hydrated_arc_rows(
     out: list[PublisherArcRow] = []
     for arc_row in rows:
         primary_book, clean_name = parse_arc_name(arc_row.name or "")
-        out.append(PublisherArcRow(
-            cv_id=arc_row.cv_id,
-            name=clean_name,
-            primary_book=primary_book,
-            cover_url=cv_image_url(arc_row.raw_payload, "medium"),
-            is_hydrated=True,
-        ))
+        out.append(
+            PublisherArcRow(
+                cv_id=arc_row.cv_id,
+                name=clean_name,
+                primary_book=primary_book,
+                cover_url=cv_image_url(arc_row.raw_payload, "medium"),
+                is_hydrated=True,
+            )
+        )
     return out
 
 
 # ---- Home: Recently added ----------------------------------------------
 
 
-async def list_recently_added(
-    db: AsyncSession, limit: int = 12
-) -> list[RecentlyAddedVolume]:
+async def list_recently_added(db: AsyncSession, limit: int = 12) -> list[RecentlyAddedVolume]:
     """Volumes with recently-matched files — CV volumes (auto/confirmed
     matches) and local volumes (Phase 11) — most recent first.
 
@@ -2957,11 +2835,7 @@ async def list_recently_added(
                 func.count(func.distinct(FileMatch.issue_cv_id)).label("n"),
             )
             .join(CvIssue, CvIssue.cv_id == FileMatch.issue_cv_id)
-            .where(
-                FileMatch.status.in_(
-                    (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                )
-            )
+            .where(FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)))
             .where(CvIssue.volume_cv_id.is_not(None))
             .group_by(CvIssue.volume_cv_id)
             .order_by(func.max(FileMatch.matched_at).desc())
@@ -2973,9 +2847,7 @@ async def list_recently_added(
             v.cv_id: v
             for v in (
                 await db.execute(
-                    select(CvVolume).where(
-                        CvVolume.cv_id.in_([g.vid for g in cv_groups])
-                    )
+                    select(CvVolume).where(CvVolume.cv_id.in_([g.vid for g in cv_groups]))
                 )
             ).scalars()
         }
@@ -3002,9 +2874,7 @@ async def list_recently_added(
             select(
                 LocalIssue.local_volume_id.label("lvid"),
                 func.max(FileMatch.matched_at).label("recent"),
-                func.count(func.distinct(FileMatch.local_issue_id)).label(
-                    "n"
-                ),
+                func.count(func.distinct(FileMatch.local_issue_id)).label("n"),
             )
             .join(LocalIssue, LocalIssue.id == FileMatch.local_issue_id)
             .where(FileMatch.status == MatchStatus.LOCAL.value)
@@ -3018,9 +2888,7 @@ async def list_recently_added(
         lvols = {
             v.id: v
             for v in (
-                await db.execute(
-                    select(LocalVolume).where(LocalVolume.id.in_(lvids))
-                )
+                await db.execute(select(LocalVolume).where(LocalVolume.id.in_(lvids)))
             ).scalars()
         }
         # A local volume has no CV image — its cover is a matched file's
@@ -3038,9 +2906,7 @@ async def list_recently_added(
                     local_id=lvid,
                     name=lv.name,
                     year=lv.year,
-                    cover_url=(
-                        f"/review/file/{file_id}/cover" if file_id else None
-                    ),
+                    cover_url=(f"/review/file/{file_id}/cover" if file_id else None),
                     issue_count=n,
                     matched_at=recent,
                 )
@@ -3207,9 +3073,7 @@ class VolumeCredit:
     is_hydrated: bool = False
 
 
-async def get_hydrated_volume_credits(
-    db: AsyncSession, cv_ids: list[int]
-) -> list[VolumeCredit]:
+async def get_hydrated_volume_credits(db: AsyncSession, cv_ids: list[int]) -> list[VolumeCredit]:
     """Look up ``cv_volumes`` rows for ``cv_ids`` and return one
     ``VolumeCredit`` per row that is *no longer a stub* (i.e. its
     ``raw_payload._stub`` marker is gone). Rows still missing from
@@ -3219,9 +3083,7 @@ async def get_hydrated_volume_credits(
     """
     if not cv_ids:
         return []
-    rows = (
-        await db.execute(select(CvVolume).where(CvVolume.cv_id.in_(cv_ids)))
-    ).scalars().all()
+    rows = (await db.execute(select(CvVolume).where(CvVolume.cv_id.in_(cv_ids)))).scalars().all()
     out: list[VolumeCredit] = []
     for vol in rows:
         payload = vol.raw_payload if isinstance(vol.raw_payload, dict) else {}
@@ -3369,11 +3231,7 @@ def _split_aliases(value: object) -> list[str]:
     """Split CV's newline-separated ``aliases`` string into a trimmed,
     de-duped list (CV occasionally repeats an alias)."""
     return list(
-        dict.fromkeys(
-            line.strip()
-            for line in str(value or "").splitlines()
-            if line.strip()
-        )
+        dict.fromkeys(line.strip() for line in str(value or "").splitlines() if line.strip())
     )
 
 
@@ -3395,9 +3253,7 @@ def _character_info(raw: dict) -> CharacterInfo:
     gender = {1: "Male", 2: "Female"}.get(raw.get("gender"))
 
     origin = raw.get("origin")
-    character_type = (
-        origin.get("name") if isinstance(origin, dict) else None
-    ) or None
+    character_type = (origin.get("name") if isinstance(origin, dict) else None) or None
 
     fa = raw.get("first_appeared_in_issue")
     first_appearance: InfoRef | None = None
@@ -3421,11 +3277,7 @@ def _character_info(raw: dict) -> CharacterInfo:
         if isinstance(d, dict) and d.get("id") is not None
     ]
 
-    powers = [
-        p["name"]
-        for p in (raw.get("powers") or [])
-        if isinstance(p, dict) and p.get("name")
-    ]
+    powers = [p["name"] for p in (raw.get("powers") or []) if isinstance(p, dict) and p.get("name")]
 
     appearance_count = raw.get("count_of_issue_appearances")
     if not isinstance(appearance_count, int):
@@ -3496,9 +3348,7 @@ async def _entity_card_page(
     total = len(cards)
 
     if letter:
-        cards = [
-            c for c in cards if _appearance_matches_letter(c.name, letter)
-        ]
+        cards = [c for c in cards if _appearance_matches_letter(c.name, letter)]
     filtered_count = len(cards)
 
     page_count = max(1, (filtered_count + page_size - 1) // page_size)
@@ -3507,11 +3357,7 @@ async def _entity_card_page(
 
     window_ids = [c.cv_id for c in window]
     if window_ids:
-        rows = (
-            await db.execute(
-                select(model).where(model.cv_id.in_(window_ids))
-            )
-        ).scalars()
+        rows = (await db.execute(select(model).where(model.cv_id.in_(window_ids)))).scalars()
         enriched: dict[int, Any] = {row.cv_id: row for row in rows}
         for card in window:
             row = enriched.get(card.cv_id)
@@ -3521,9 +3367,7 @@ async def _entity_card_page(
     return window, page, page_count, total, filtered_count
 
 
-async def _count_owned_appearances(
-    db: AsyncSession, issue_stubs: list[dict]
-) -> tuple[int, int]:
+async def _count_owned_appearances(db: AsyncSession, issue_stubs: list[dict]) -> tuple[int, int]:
     """``(total, owned)`` issue-appearance counts for a character — the
     figures behind the sidebar completeness ring.
 
@@ -3532,9 +3376,7 @@ async def _count_owned_appearances(
     COUNT query; an empty credit list short-circuits to ``(0, 0)``.
     """
     member_ids = {
-        int(s["id"])
-        for s in issue_stubs
-        if isinstance(s, dict) and s.get("id") is not None
+        int(s["id"]) for s in issue_stubs if isinstance(s, dict) and s.get("id") is not None
     }
     if not member_ids:
         return 0, 0
@@ -3542,9 +3384,7 @@ async def _count_owned_appearances(
         await db.execute(
             select(func.count(func.distinct(FileMatch.issue_cv_id))).where(
                 FileMatch.issue_cv_id.in_(member_ids),
-                FileMatch.status.in_(
-                    (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                ),
+                FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)),
             )
         )
     ).scalar() or 0
@@ -3583,17 +3423,12 @@ async def _character_volume_page(
         .scalars()
         .all()
     )
-    cards = [
-        VolumeCredit(cv_id=r.volume_cv_id, name=r.name, cover_url=r.cover_url)
-        for r in rows
-    ]
+    cards = [VolumeCredit(cv_id=r.volume_cv_id, name=r.name, cover_url=r.cover_url) for r in rows]
     cards.sort(key=lambda c: c.name.casefold())
     total = len(cards)
 
     if letter:
-        cards = [
-            c for c in cards if _appearance_matches_letter(c.name, letter)
-        ]
+        cards = [c for c in cards if _appearance_matches_letter(c.name, letter)]
     filtered_count = len(cards)
 
     page_count = max(1, (filtered_count + page_size - 1) // page_size)
@@ -3605,20 +3440,14 @@ async def _character_volume_page(
         volumes = {
             v.cv_id: v
             for v in (
-                await db.execute(
-                    select(CvVolume).where(CvVolume.cv_id.in_(window_ids))
-                )
+                await db.execute(select(CvVolume).where(CvVolume.cv_id.in_(window_ids)))
             ).scalars()
         }
         for card in window:
             volume = volumes.get(card.cv_id)
             if volume is None:
                 continue
-            payload = (
-                volume.raw_payload
-                if isinstance(volume.raw_payload, dict)
-                else {}
-            )
+            payload = volume.raw_payload if isinstance(volume.raw_payload, dict) else {}
             # A stub row (``_stub: True``) only has id/name — treat it
             # as un-hydrated so the route fetches the real volume.
             card.is_hydrated = payload.get("_stub") is not True
@@ -3667,14 +3496,10 @@ async def get_character_detail(
     raw = character.raw_payload or {}
     publisher_payload = raw.get("publisher") or {}
     publisher_cv_id = (
-        int(publisher_payload["id"])
-        if publisher_payload.get("id") is not None
-        else None
+        int(publisher_payload["id"]) if publisher_payload.get("id") is not None else None
     )
     # Issue-appearance counts for the sidebar completeness ring.
-    total_count, owned_count = await _count_owned_appearances(
-        db, raw.get("issue_credits") or []
-    )
+    total_count, owned_count = await _count_owned_appearances(db, raw.get("issue_credits") or [])
     # "Appearances" tab — the volumes scraped from CV's issues-cover
     # page. ``volumes_scraping`` stays True until that scrape has run;
     # the route enqueues it and the page shows a "building" state.
@@ -3685,9 +3510,7 @@ async def get_character_detail(
         page_count,
         appearance_volumes_total,
         filtered_count,
-    ) = await _character_volume_page(
-        db, cv_id, page=page, page_size=page_size, letter=letter
-    )
+    ) = await _character_volume_page(db, cv_id, page=page, page_size=page_size, letter=letter)
 
     info = _character_info(raw)
     # The "First appearance" row renders a cover thumbnail — pull that
@@ -3697,39 +3520,31 @@ async def get_character_detail(
     if info.first_appearance is not None:
         fa_row = await db.get(CvIssue, info.first_appearance.cv_id)
         if fa_row is not None:
-            info.first_appearance.cover_url = cv_image_url(
-                fa_row.raw_payload, "thumb"
-            )
+            info.first_appearance.cover_url = cv_image_url(fa_row.raw_payload, "thumb")
             info.first_appearance.is_hydrated = fa_row.fetched_at is not None
 
     # "Friends" / "Enemies" / "Teams" tabs — paginated avatar cards,
     # each with its own pager.
-    friend_cards, friends_page, friends_page_count, friends_total, _ = (
-        await _entity_card_page(
-            db,
-            raw.get("character_friends") or [],
-            CvCharacter,
-            page=friends_page,
-            page_size=page_size,
-        )
+    friend_cards, friends_page, friends_page_count, friends_total, _ = await _entity_card_page(
+        db,
+        raw.get("character_friends") or [],
+        CvCharacter,
+        page=friends_page,
+        page_size=page_size,
     )
-    enemy_cards, enemies_page, enemies_page_count, enemies_total, _ = (
-        await _entity_card_page(
-            db,
-            raw.get("character_enemies") or [],
-            CvCharacter,
-            page=enemies_page,
-            page_size=page_size,
-        )
+    enemy_cards, enemies_page, enemies_page_count, enemies_total, _ = await _entity_card_page(
+        db,
+        raw.get("character_enemies") or [],
+        CvCharacter,
+        page=enemies_page,
+        page_size=page_size,
     )
-    team_cards, teams_page, teams_page_count, teams_total, _ = (
-        await _entity_card_page(
-            db,
-            raw.get("teams") or [],
-            CvTeam,
-            page=teams_page,
-            page_size=page_size,
-        )
+    team_cards, teams_page, teams_page_count, teams_total, _ = await _entity_card_page(
+        db,
+        raw.get("teams") or [],
+        CvTeam,
+        page=teams_page,
+        page_size=page_size,
     )
 
     return CharacterDetail(
@@ -3801,9 +3616,7 @@ async def _volume_credit_page(
 
     # Alphabet-bar filter — by the volume name's first letter.
     if letter:
-        rows = [
-            r for r in rows if _appearance_matches_letter(r.name, letter)
-        ]
+        rows = [r for r in rows if _appearance_matches_letter(r.name, letter)]
     filtered_count = len(rows)
 
     page_count = max(1, (filtered_count + page_size - 1) // page_size)
@@ -3815,20 +3628,14 @@ async def _volume_credit_page(
         volumes = {
             v.cv_id: v
             for v in (
-                await db.execute(
-                    select(CvVolume).where(CvVolume.cv_id.in_(window_ids))
-                )
+                await db.execute(select(CvVolume).where(CvVolume.cv_id.in_(window_ids)))
             ).scalars()
         }
         for row in window:
             volume = volumes.get(row.cv_id)
             if volume is None:
                 continue
-            payload = (
-                volume.raw_payload
-                if isinstance(volume.raw_payload, dict)
-                else {}
-            )
+            payload = volume.raw_payload if isinstance(volume.raw_payload, dict) else {}
             # A stub row (``_stub: True``) has only id/name — treat it
             # as un-hydrated so the route fetches the real volume.
             row.is_hydrated = payload.get("_stub") is not True
@@ -3878,41 +3685,35 @@ async def get_creator_detail(
         return None
 
     raw = person.raw_payload or {}
-    volume_credits, page, page_count, total, filtered_count = (
-        await _volume_credit_page(
-            db,
-            raw.get("volume_credits") or [],
-            page=page,
-            page_size=page_size,
-            letter=letter,
-        )
+    volume_credits, page, page_count, total, filtered_count = await _volume_credit_page(
+        db,
+        raw.get("volume_credits") or [],
+        page=page,
+        page_size=page_size,
+        letter=letter,
     )
     # Both avatar tabs are sorted by name and alphabet-bar filterable.
     # Story arcs additionally split CV's quoted ``"<book>"`` prefix off
     # the name (``_arc_card_name``) — done before the sort / filter so
     # they key on the displayed name, with the book as the card badge.
-    char_cards, cpage, cpage_count, ctotal, cfiltered = (
-        await _entity_card_page(
-            db,
-            raw.get("created_characters") or [],
-            CvCharacter,
-            page=characters_page,
-            page_size=page_size,
-            sort=True,
-            letter=characters_letter,
-        )
+    char_cards, cpage, cpage_count, ctotal, cfiltered = await _entity_card_page(
+        db,
+        raw.get("created_characters") or [],
+        CvCharacter,
+        page=characters_page,
+        page_size=page_size,
+        sort=True,
+        letter=characters_letter,
     )
-    arc_cards, apage, apage_count, atotal, afiltered = (
-        await _entity_card_page(
-            db,
-            raw.get("story_arc_credits") or [],
-            CvStoryArc,
-            page=arcs_page,
-            page_size=page_size,
-            sort=True,
-            letter=arcs_letter,
-            name_transform=_arc_card_name,
-        )
+    arc_cards, apage, apage_count, atotal, afiltered = await _entity_card_page(
+        db,
+        raw.get("story_arc_credits") or [],
+        CvStoryArc,
+        page=arcs_page,
+        page_size=page_size,
+        sort=True,
+        letter=arcs_letter,
+        name_transform=_arc_card_name,
     )
 
     return CreatorDetail(
@@ -3958,11 +3759,7 @@ def _team_info(raw: dict) -> TeamInfo:
 
     # CV ``issues_disbanded_in`` — ``disbanded_in_issues`` tolerated as
     # a fallback key.
-    disbanded_raw = (
-        raw.get("issues_disbanded_in")
-        or raw.get("disbanded_in_issues")
-        or []
-    )
+    disbanded_raw = raw.get("issues_disbanded_in") or raw.get("disbanded_in_issues") or []
     disbanded_in = [
         InfoRef(
             cv_id=int(d["id"]),
@@ -4019,43 +3816,40 @@ async def get_team_detail(
     raw = team.raw_payload or {}
     publisher_payload = raw.get("publisher") or {}
     publisher_cv_id = (
-        int(publisher_payload["id"])
-        if publisher_payload.get("id") is not None
-        else None
+        int(publisher_payload["id"]) if publisher_payload.get("id") is not None else None
     )
-    member_cards, members_page, members_page_count, members_total, _ = (
-        await _entity_card_page(
-            db,
-            raw.get("characters") or [],
-            CvCharacter,
-            page=page,
-            page_size=page_size,
-        )
+    member_cards, members_page, members_page_count, members_total, _ = await _entity_card_page(
+        db,
+        raw.get("characters") or [],
+        CvCharacter,
+        page=page,
+        page_size=page_size,
     )
     # "Friends" / "Enemies" tabs — characters, same as the character
     # page's allies / foes. Each gets its own paged window of avatars.
-    friend_cards, friends_page, friends_page_count, friends_total, _ = (
-        await _entity_card_page(
-            db,
-            raw.get("character_friends") or [],
-            CvCharacter,
-            page=friends_page,
-            page_size=page_size,
-        )
+    friend_cards, friends_page, friends_page_count, friends_total, _ = await _entity_card_page(
+        db,
+        raw.get("character_friends") or [],
+        CvCharacter,
+        page=friends_page,
+        page_size=page_size,
     )
-    enemy_cards, enemies_page, enemies_page_count, enemies_total, _ = (
-        await _entity_card_page(
-            db,
-            raw.get("character_enemies") or [],
-            CvCharacter,
-            page=enemies_page,
-            page_size=page_size,
-        )
+    enemy_cards, enemies_page, enemies_page_count, enemies_total, _ = await _entity_card_page(
+        db,
+        raw.get("character_enemies") or [],
+        CvCharacter,
+        page=enemies_page,
+        page_size=page_size,
     )
     # "Volumes" tab — credited volumes, same as the creator page (its
     # own pager + alphabet-bar letter filter).
-    (volume_rows, volumes_page, volumes_page_count, volumes_total,
-     volumes_filtered) = await _volume_credit_page(
+    (
+        volume_rows,
+        volumes_page,
+        volumes_page_count,
+        volumes_total,
+        volumes_filtered,
+    ) = await _volume_credit_page(
         db,
         raw.get("volume_credits") or [],
         page=volumes_page,
@@ -4065,8 +3859,7 @@ async def get_team_detail(
     # "Story arcs" tab — arcs the team is credited on, as avatar cards
     # sorted by name (CV's quoted ``"<book>"`` prefix split off via
     # ``_arc_card_name``), with their own pager + alphabet bar.
-    (arc_cards, arcs_page, arcs_page_count, arcs_total,
-     arcs_filtered) = await _entity_card_page(
+    (arc_cards, arcs_page, arcs_page_count, arcs_total, arcs_filtered) = await _entity_card_page(
         db,
         raw.get("story_arc_credits") or [],
         CvStoryArc,
@@ -4084,9 +3877,7 @@ async def get_team_detail(
     if info.first_appearance is not None:
         fa_row = await db.get(CvIssue, info.first_appearance.cv_id)
         if fa_row is not None:
-            info.first_appearance.cover_url = cv_image_url(
-                fa_row.raw_payload, "thumb"
-            )
+            info.first_appearance.cover_url = cv_image_url(fa_row.raw_payload, "thumb")
             info.first_appearance.is_hydrated = fa_row.fetched_at is not None
 
     return TeamDetail(

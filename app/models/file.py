@@ -59,9 +59,7 @@ class File(Base):
 
     __tablename__ = "files"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     archive_format: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -75,9 +73,7 @@ class File(Base):
     # image. The cover endpoint lazy-backfills the long tail.
     cover_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cover_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    cover_is_wraparound: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True
-    )
+    cover_is_wraparound: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     # Interior-page geometry. Sampled from a mid-archive page at scan
     # time (see ``app.scanner.scanner._inspect_interior``) so the
     # duplicates scorer can prefer a real interior signal over the
@@ -90,12 +86,8 @@ class File(Base):
     comicinfo_status: Mapped[str] = mapped_column(
         String, nullable=False, default=ComicInfoStatus.NONE
     )
-    excluded_from_matching: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
-    first_scanned_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    excluded_from_matching: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    first_scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     locations: Mapped[list["FileLocation"]] = relationship(
         back_populates="file",
@@ -112,9 +104,7 @@ class FileLocation(Base):
 
     __tablename__ = "file_locations"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     file_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("files.id", ondelete="CASCADE"),
@@ -122,12 +112,8 @@ class FileLocation(Base):
     )
     path: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     mtime: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    missing_since: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     file: Mapped[File] = relationship(back_populates="locations")
 
@@ -179,13 +165,9 @@ class FileError(Base):
     # metadata. Without this declaration, INSERT ... ON CONFLICT
     # (path, kind) fails in tests with "no unique or exclusion
     # constraint matching the ON CONFLICT specification".
-    __table_args__ = (
-        UniqueConstraint("path", "kind", name="uq_file_errors_path_kind"),
-    )
+    __table_args__ = (UniqueConstraint("path", "kind", name="uq_file_errors_path_kind"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     path: Mapped[str] = mapped_column(String, nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String, nullable=False, index=True)
     error_class: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -195,12 +177,8 @@ class FileError(Base):
         ForeignKey("files.id", ondelete="CASCADE"),
         nullable=True,
     )
-    first_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<FileError kind={self.kind} path={self.path!r}>"

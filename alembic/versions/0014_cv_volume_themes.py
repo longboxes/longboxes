@@ -43,9 +43,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "cv_volumes",
-        sa.Column(
-            "themes_scraped_at", sa.DateTime(timezone=True), nullable=True
-        ),
+        sa.Column("themes_scraped_at", sa.DateTime(timezone=True), nullable=True),
     )
 
 

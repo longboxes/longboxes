@@ -61,7 +61,7 @@ def _volume_payload(cv_id: int = 18166, issue_count: int = 2) -> dict:
             {
                 "id": 100 + i,
                 "issue_number": str(i + 1),
-                "name": f"Chapter {i+1}",
+                "name": f"Chapter {i + 1}",
                 "cover_date": "2012-03-14",
             }
             for i in range(issue_count)
@@ -323,9 +323,7 @@ async def test_bulk_hydrate_stubs_an_uncached_cross_volume(db_session):
             },
         ],
     }
-    respx.get(f"{BASE_URL}/issues/").mock(
-        return_value=httpx.Response(200, json=envelope)
-    )
+    respx.get(f"{BASE_URL}/issues/").mock(return_value=httpx.Response(200, json=envelope))
 
     client = _fast_client()
     cache = ComicVineCache(client)

@@ -39,8 +39,7 @@ async def _main(username: str, password: str) -> int:
             # Distinct from create_user's "already exists" path —
             # here a missing user is the actual failure mode.
             print(
-                f"error: user {username!r} not found "
-                f"(use create_user to make a new one)",
+                f"error: user {username!r} not found (use create_user to make a new one)",
                 file=sys.stderr,
             )
             return 1

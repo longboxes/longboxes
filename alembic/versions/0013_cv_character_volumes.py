@@ -31,9 +31,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column(
         "cv_characters",
-        sa.Column(
-            "volumes_scraped_at", sa.DateTime(timezone=True), nullable=True
-        ),
+        sa.Column("volumes_scraped_at", sa.DateTime(timezone=True), nullable=True),
     )
     # The composite primary key (character_cv_id, volume_cv_id) already
     # indexes character_cv_id as its leading column, so a "all volumes
@@ -45,9 +43,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("cover_url", sa.String(), nullable=True),
         sa.Column("position", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["character_cv_id"], ["cv_characters.cv_id"]
-        ),
+        sa.ForeignKeyConstraint(["character_cv_id"], ["cv_characters.cv_id"]),
         sa.PrimaryKeyConstraint("character_cv_id", "volume_cv_id"),
     )
 

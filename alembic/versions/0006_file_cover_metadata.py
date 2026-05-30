@@ -25,9 +25,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("files", sa.Column("cover_width", sa.Integer(), nullable=True))
-    op.add_column(
-        "files", sa.Column("cover_height", sa.Integer(), nullable=True)
-    )
+    op.add_column("files", sa.Column("cover_height", sa.Integer(), nullable=True))
     op.add_column(
         "files",
         sa.Column("cover_is_wraparound", sa.Boolean(), nullable=True),

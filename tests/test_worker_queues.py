@@ -102,9 +102,7 @@ class _FakeRedisFactory:
 def fake_redis(monkeypatch):
     """Patch every place ``enqueue_revalidate`` reaches for Redis."""
     factory = _FakeRedisFactory()
-    monkeypatch.setattr(
-        "app.jobs.revalidate.Redis.from_url", factory
-    )
+    monkeypatch.setattr("app.jobs.revalidate.Redis.from_url", factory)
     return factory.conn
 
 

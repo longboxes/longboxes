@@ -43,11 +43,7 @@ async def _main(vol_cv_id: int) -> int:
         print()
 
         issues = list(
-            (
-                await db.execute(
-                    select(CvIssue).where(CvIssue.volume_cv_id == vol_cv_id)
-                )
-            ).scalars()
+            (await db.execute(select(CvIssue).where(CvIssue.volume_cv_id == vol_cv_id))).scalars()
         )
         issues.sort(key=lambda i: sort_key_issue_number(i.issue_number))
 
@@ -110,8 +106,7 @@ async def _main(vol_cv_id: int) -> int:
         # Per-issue arc_credits as seen by the template:
         with_template_arcs = sum(1 for i in detail.issues if i.arc_credits)
         print(
-            f"Issues with arc_credits in VolumeDetail: {with_template_arcs} "
-            f"of {len(detail.issues)}"
+            f"Issues with arc_credits in VolumeDetail: {with_template_arcs} of {len(detail.issues)}"
         )
         for irow in detail.issues[:10]:
             ids = [a.cv_id for a in irow.arc_credits]

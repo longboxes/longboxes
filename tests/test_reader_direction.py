@@ -198,10 +198,7 @@ async def test_unmatched_file_falls_back_to_default(db_session):
     db_session.add(f)
     await db_session.commit()
 
-    assert (
-        await get_reading_direction(db_session, f.id)
-        == DEFAULT_READING_DIRECTION
-    )
+    assert await get_reading_direction(db_session, f.id) == DEFAULT_READING_DIRECTION
     # No volume to store it on — reports False rather than raising.
     assert await set_reading_direction(db_session, f.id, "rtl") is False
     assert await get_reading_direction(db_session, f.id) == "ltr"

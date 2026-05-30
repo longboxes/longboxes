@@ -309,9 +309,7 @@ def classify_volume_format(
         # collection marker (TPB / omnibus / "collects #1-6" / ...)
         # otherwise flags it ``collection``; with neither, a
         # lone-issue volume defaults to ``one_shot``.
-        haystack = " ".join(
-            t for t in (name, deck, description, first_issue_name) if t
-        ).lower()
+        haystack = " ".join(t for t in (name, deck, description, first_issue_name) if t).lower()
         if any(kw in haystack for kw in _ONE_SHOT_KEYWORDS):
             return "one_shot"
         if any(kw in haystack for kw in _COLLECTION_KEYWORDS):
@@ -395,11 +393,7 @@ def volume_status_from_themes(themes: Any) -> str | None:
     """Publication status from a volume's scraped CV themes —
     ``cancelled`` / ``complete`` / ``unfinished`` / ``ongoing``, or
     None when no status theme is present."""
-    present = {
-        _THEME_STATUS_BY_ID[i]
-        for i in _theme_ids(themes)
-        if i in _THEME_STATUS_BY_ID
-    }
+    present = {_THEME_STATUS_BY_ID[i] for i in _theme_ids(themes) if i in _THEME_STATUS_BY_ID}
     return next((s for s in _STATUS_ORDER if s in present), None)
 
 
@@ -407,11 +401,7 @@ def volume_type_from_themes(themes: Any) -> str | None:
     """Series type from a volume's scraped CV themes — one of the
     ``classify_volume_format`` buckets, or None when no type theme is
     present (the caller falls back to the issue-count heuristic)."""
-    present = {
-        _THEME_TYPE_BY_ID[i]
-        for i in _theme_ids(themes)
-        if i in _THEME_TYPE_BY_ID
-    }
+    present = {_THEME_TYPE_BY_ID[i] for i in _theme_ids(themes) if i in _THEME_TYPE_BY_ID}
     return next((t for t in _TYPE_ORDER if t in present), None)
 
 
@@ -437,7 +427,5 @@ def classify_cv_volume(volume: Any) -> str:
         count_of_issues=getattr(volume, "count_of_issues", None),
         deck=payload.get("deck"),
         description=payload.get("description"),
-        first_issue_name=(
-            first_issue.get("name") if isinstance(first_issue, dict) else None
-        ),
+        first_issue_name=(first_issue.get("name") if isinstance(first_issue, dict) else None),
     )

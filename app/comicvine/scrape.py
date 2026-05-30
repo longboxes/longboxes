@@ -64,8 +64,7 @@ _BROWSER_HEADERS = {
         "Chrome/135.0.0.0 Safari/537.36"
     ),
     "Accept": (
-        "text/html,application/xhtml+xml,application/xml;q=0.9,"
-        "image/avif,image/webp,*/*;q=0.8"
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
     ),
     "Accept-Language": "en-US,en;q=0.9",
     "Sec-Fetch-Dest": "document",
@@ -116,9 +115,7 @@ async def fetch_cv_page(url: str, *, timeout: float = 12.0) -> str | None:
         # access — a header tweak won't reliably change that. The scrape
         # just gives up and fails soft. The attempt is still recorded by
         # the caller so it isn't retried.
-        logger.warning(
-            "CV-page fetch %s returned HTTP %s", url, resp.status_code
-        )
+        logger.warning("CV-page fetch %s returned HTTP %s", url, resp.status_code)
         return None
     content_type = resp.headers.get("content-type", "")
     if "html" not in content_type.lower():
@@ -222,9 +219,7 @@ class _IssuesCoverParser(HTMLParser):
         self._in_results = False
         self._results_text: list[str] = []
 
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = {k: (v or "") for k, v in attrs}
         if tag == "li":
             classes = (a.get("class") or "").split()
@@ -237,9 +232,7 @@ class _IssuesCoverParser(HTMLParser):
             if vm:
                 self._cv_id = int(vm.group(1))
                 self._text = []
-                self._link_title = (
-                    a.get("title") or a.get("data-title") or ""
-                ).strip()
+                self._link_title = (a.get("title") or a.get("data-title") or "").strip()
                 self._cover = None
                 self._img_name = ""
             return
@@ -247,9 +240,7 @@ class _IssuesCoverParser(HTMLParser):
             if self._cover is None:
                 self._cover = _pick_img_src(a)
             if not self._img_name:
-                self._img_name = (
-                    a.get("alt") or a.get("title") or ""
-                ).strip()
+                self._img_name = (a.get("alt") or a.get("title") or "").strip()
 
     def handle_data(self, data: str) -> None:
         if self._cv_id is not None:
@@ -296,9 +287,7 @@ def parse_issues_cover_page(html: str) -> ScrapedCoverPage:
     for cv_id, name, cover in parser.entries:
         existing = merged.get(cv_id)
         if existing is None:
-            merged[cv_id] = ScrapedVolume(
-                cv_id=cv_id, name=name, cover_url=cover
-            )
+            merged[cv_id] = ScrapedVolume(cv_id=cv_id, name=name, cover_url=cover)
             continue
         if not existing.name and name:
             existing.name = name
@@ -390,9 +379,7 @@ async def scrape_character_volumes(
 
     # Replace this character's volume rows wholesale.
     await db.execute(
-        sa_delete(CvCharacterVolume).where(
-            CvCharacterVolume.character_cv_id == character_cv_id
-        )
+        sa_delete(CvCharacterVolume).where(CvCharacterVolume.character_cv_id == character_cv_id)
     )
     db.add_all(
         [
@@ -453,9 +440,7 @@ class _VolumeThemesParser(HTMLParser):
         self._theme_id: int | None = None
         self._text: list[str] = []
 
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag != "a":
             return
         a = {k: (v or "") for k, v in attrs}
@@ -534,8 +519,6 @@ async def scrape_volume_themes(
         return {"status": "fetch_failed", "url": url}
 
     themes = parse_volume_themes(html)
-    volume.themes = [
-        {"id": t.theme_id, "name": t.name} for t in themes
-    ]
+    volume.themes = [{"id": t.theme_id, "name": t.name} for t in themes]
     await db.commit()
     return {"status": "ok", "themes": len(themes), "url": url}

@@ -60,13 +60,9 @@ def shape_volume_results(envelope: dict) -> list[dict]:
         if not isinstance(vid, int):
             continue
         publisher = vol.get("publisher")
-        publisher_name = (
-            publisher.get("name") if isinstance(publisher, dict) else None
-        )
+        publisher_name = publisher.get("name") if isinstance(publisher, dict) else None
         first_issue = vol.get("first_issue")
-        first_issue_name = (
-            first_issue.get("name") if isinstance(first_issue, dict) else None
-        )
+        first_issue_name = first_issue.get("name") if isinstance(first_issue, dict) else None
         shaped.append(
             {
                 "cv_id": vid,
@@ -101,14 +97,10 @@ def result_facets(results: list[dict]) -> list[dict]:
     the visible-count readout; serialising the full result dicts —
     each carrying a multi-KB volume description — into an HTML
     attribute would bloat the page badly."""
-    return [
-        {"publisher": r["publisher"], "format": r["format"]} for r in results
-    ]
+    return [{"publisher": r["publisher"], "format": r["format"]} for r in results]
 
 
-async def publishers_for_volumes(
-    db: AsyncSession, volume_ids: set[int]
-) -> dict[int, str]:
+async def publishers_for_volumes(db: AsyncSession, volume_ids: set[int]) -> dict[int, str]:
     """Map volume cv_id → publisher name, from our local CV cache.
 
     Search results are CV volumes/issues we may not have ingested,
@@ -121,9 +113,7 @@ async def publishers_for_volumes(
         return {}
     vol_rows = (
         await db.execute(
-            select(CvVolume.cv_id, CvVolume.publisher_cv_id).where(
-                CvVolume.cv_id.in_(volume_ids)
-            )
+            select(CvVolume.cv_id, CvVolume.publisher_cv_id).where(CvVolume.cv_id.in_(volume_ids))
         )
     ).all()
     publisher_ids = {pid for _, pid in vol_rows if pid is not None}

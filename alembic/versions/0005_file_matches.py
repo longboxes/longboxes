@@ -67,18 +67,14 @@ def upgrade() -> None:
         "file_matches",
         "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
     )
-    op.create_index(
-        "ix_file_matches_issue_cv_id", "file_matches", ["issue_cv_id"]
-    )
+    op.create_index("ix_file_matches_issue_cv_id", "file_matches", ["issue_cv_id"])
     op.create_index("ix_file_matches_status", "file_matches", ["status"])
 
 
 def downgrade() -> None:
     op.drop_index("ix_file_matches_status", table_name="file_matches")
     op.drop_index("ix_file_matches_issue_cv_id", table_name="file_matches")
-    op.drop_constraint(
-        "ck_file_matches_confidence_range", "file_matches", type_="check"
-    )
+    op.drop_constraint("ck_file_matches_confidence_range", "file_matches", type_="check")
     op.drop_constraint("ck_file_matches_source", "file_matches", type_="check")
     op.drop_constraint("ck_file_matches_status", "file_matches", type_="check")
     op.drop_table("file_matches")

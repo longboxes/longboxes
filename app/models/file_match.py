@@ -30,12 +30,12 @@ class MatchStatus(StrEnum):
     the review queue and the matcher never overwrites them.
     """
 
-    AUTO = "auto"            # matched without human review (confidence ≥ 0.85)
+    AUTO = "auto"  # matched without human review (confidence ≥ 0.85)
     CONFIRMED = "confirmed"  # human reviewer accepted the match
-    PENDING = "pending"      # 0.50-0.85; in the review queue
-    REJECTED = "rejected"    # human rejected the candidates; try again later
+    PENDING = "pending"  # 0.50-0.85; in the review queue
+    REJECTED = "rejected"  # human rejected the candidates; try again later
     UNMATCHED = "unmatched"  # < 0.50; no usable candidates
-    LOCAL = "local"          # a user-authored local entry (not in CV)
+    LOCAL = "local"  # a user-authored local entry (not in CV)
     SUPPLEMENT = "supplement"  # supplemental content attached to a CV volume
 
 
@@ -43,9 +43,9 @@ class MatchSource(StrEnum):
     """How the match was produced."""
 
     COMICINFO_CVID = "comicinfo_cvid"  # Stage 1: <Web> field had a CV ID
-    FILENAME = "filename"              # Stage 2-3: parsed + searched
-    MANUAL = "manual"                  # human picked it from CV search
-    LOCAL = "local"                    # human authored local metadata
+    FILENAME = "filename"  # Stage 2-3: parsed + searched
+    MANUAL = "manual"  # human picked it from CV search
+    LOCAL = "local"  # human authored local metadata
 
 
 class FileMatch(Base):
@@ -86,9 +86,7 @@ class FileMatch(Base):
     supplement_type: Mapped[str | None] = mapped_column(String, nullable=True)
     # CV-match heuristic score. NULL for human-resolved rows that had no
     # candidate to score — CONFIRMED-by-pick, LOCAL, SUPPLEMENT.
-    confidence: Mapped[Decimal | None] = mapped_column(
-        Numeric(4, 3), nullable=True
-    )
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3), nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     # Top-N alternative candidates serialised as a list of

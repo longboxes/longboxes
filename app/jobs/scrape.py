@@ -41,17 +41,11 @@ def scrape_character_volumes_job(
     ``cv_character_volumes``."""
 
     async def _run() -> dict:
-        engine = create_async_engine(
-            app_settings.database_url, poolclass=NullPool
-        )
+        engine = create_async_engine(app_settings.database_url, poolclass=NullPool)
         try:
-            session_factory = async_sessionmaker(
-                engine, expire_on_commit=False
-            )
+            session_factory = async_sessionmaker(engine, expire_on_commit=False)
             async with session_factory() as db:
-                result = await scrape_character_volumes(
-                    db, character_cv_id, site_url=site_url
-                )
+                result = await scrape_character_volumes(db, character_cv_id, site_url=site_url)
             logger.info(
                 "character-volumes scrape cv_id=%s -> %s",
                 character_cv_id,
@@ -99,20 +93,12 @@ def scrape_volume_themes_job(
     ``cv_volumes.themes``."""
 
     async def _run() -> dict:
-        engine = create_async_engine(
-            app_settings.database_url, poolclass=NullPool
-        )
+        engine = create_async_engine(app_settings.database_url, poolclass=NullPool)
         try:
-            session_factory = async_sessionmaker(
-                engine, expire_on_commit=False
-            )
+            session_factory = async_sessionmaker(engine, expire_on_commit=False)
             async with session_factory() as db:
-                result = await scrape_volume_themes(
-                    db, volume_cv_id, site_url=site_url
-                )
-            logger.info(
-                "volume-themes scrape cv_id=%s -> %s", volume_cv_id, result
-            )
+                result = await scrape_volume_themes(db, volume_cv_id, site_url=site_url)
+            logger.info("volume-themes scrape cv_id=%s -> %s", volume_cv_id, result)
             return result
         finally:
             await engine.dispose()
@@ -158,9 +144,7 @@ def enqueue_character_volumes_scrape_interactive(
 ) -> None:
     """``enqueue_character_volumes_scrape`` pinned to the ``interactive``
     queue. Browse-page entry point."""
-    enqueue_character_volumes_scrape(
-        character_cv_id, site_url=site_url, queue="interactive"
-    )
+    enqueue_character_volumes_scrape(character_cv_id, site_url=site_url, queue="interactive")
 
 
 def enqueue_volume_themes_scrape_interactive(
@@ -170,6 +154,4 @@ def enqueue_volume_themes_scrape_interactive(
 ) -> None:
     """``enqueue_volume_themes_scrape`` pinned to the ``interactive``
     queue. Browse-page entry point."""
-    enqueue_volume_themes_scrape(
-        volume_cv_id, site_url=site_url, queue="interactive"
-    )
+    enqueue_volume_themes_scrape(volume_cv_id, site_url=site_url, queue="interactive")

@@ -28,9 +28,7 @@ class LocalVolume(Base):
 
     __tablename__ = "local_volumes"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String, nullable=False)
     # The volume's start year — same role as ``cv_volumes.year``.
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -70,9 +68,7 @@ class LocalIssue(Base):
 
     __tablename__ = "local_issues"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     local_volume_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("local_volumes.id", ondelete="CASCADE"),

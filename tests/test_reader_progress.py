@@ -80,9 +80,7 @@ def _cv_volume(cv_id: int, name: str) -> CvVolume:
     )
 
 
-def _cv_issue(
-    cv_id: int, *, volume_cv_id: int, number: str, name: str | None = None
-) -> CvIssue:
+def _cv_issue(cv_id: int, *, volume_cv_id: int, number: str, name: str | None = None) -> CvIssue:
     return CvIssue(
         cv_id=cv_id,
         volume_cv_id=volume_cv_id,
@@ -150,9 +148,7 @@ async def test_save_and_get_progress(db_session):
 
     assert await get_read_progress(db_session, user.id, f.id) is None
 
-    saved = await save_read_progress(
-        db_session, user.id, f.id, page=3, page_count=20
-    )
+    saved = await save_read_progress(db_session, user.id, f.id, page=3, page_count=20)
     assert saved.page == 3
     assert saved.page_count == 20
     assert saved.finished_at is None
@@ -167,9 +163,7 @@ async def test_finished_at_set_on_last_page(db_session):
     db_session.add_all([user, f])
     await db_session.commit()
 
-    saved = await save_read_progress(
-        db_session, user.id, f.id, page=19, page_count=20
-    )
+    saved = await save_read_progress(db_session, user.id, f.id, page=19, page_count=20)
     assert saved.finished_at is not None
 
 
@@ -179,16 +173,12 @@ async def test_finished_at_is_sticky(db_session):
     await db_session.commit()
 
     finished = (
-        await save_read_progress(
-            db_session, user.id, f.id, page=19, page_count=20
-        )
+        await save_read_progress(db_session, user.id, f.id, page=19, page_count=20)
     ).finished_at
     assert finished is not None
 
     # Paging back — re-reading must not un-finish the comic.
-    again = await save_read_progress(
-        db_session, user.id, f.id, page=2, page_count=20
-    )
+    again = await save_read_progress(db_session, user.id, f.id, page=2, page_count=20)
     assert again.page == 2
     assert again.finished_at == finished
 
@@ -198,15 +188,11 @@ async def test_save_clamps_page_into_range(db_session):
     db_session.add_all([user, f])
     await db_session.commit()
 
-    over = await save_read_progress(
-        db_session, user.id, f.id, page=999, page_count=10
-    )
+    over = await save_read_progress(db_session, user.id, f.id, page=999, page_count=10)
     assert over.page == 9  # clamped onto the last page
     assert over.finished_at is not None
 
-    under = await save_read_progress(
-        db_session, user.id, f.id, page=-5, page_count=10
-    )
+    under = await save_read_progress(db_session, user.id, f.id, page=-5, page_count=10)
     assert under.page == 0
 
 
@@ -221,9 +207,7 @@ async def test_continue_reading_lists_in_progress(db_session):
     # bare files without a match row are skipped (see the unmatched-files
     # tests below). The actual target doesn't matter here — we're
     # exercising the in-progress vs finished ordering, not labels.
-    db_session.add_all(
-        [_resolved_match(fa.id), _resolved_match(fb.id), _resolved_match(fc.id)]
-    )
+    db_session.add_all([_resolved_match(fa.id), _resolved_match(fb.id), _resolved_match(fc.id)])
     await db_session.commit()
 
     await save_read_progress(db_session, user.id, fa.id, page=5, page_count=20)
@@ -367,10 +351,18 @@ async def test_continue_reading_excludes_unmatched_files(db_session):
     # row for the unmatched file. The route-level gate is tested
     # separately below.
     await save_read_progress(
-        db_session, user.id, unmatched.id, page=2, page_count=20,
+        db_session,
+        user.id,
+        unmatched.id,
+        page=2,
+        page_count=20,
     )
     await save_read_progress(
-        db_session, user.id, matched.id, page=2, page_count=20,
+        db_session,
+        user.id,
+        matched.id,
+        page=2,
+        page_count=20,
     )
 
     cards = await list_continue_reading(db_session, user.id)
@@ -389,7 +381,11 @@ async def test_recently_read_excludes_unmatched_files(db_session):
     await db_session.commit()
 
     await save_read_progress(
-        db_session, user.id, unmatched.id, page=19, page_count=20,
+        db_session,
+        user.id,
+        unmatched.id,
+        page=19,
+        page_count=20,
     )
     # save_read_progress stamps finished_at when the last page is reached.
     cards = await list_recently_read(db_session, user.id)
@@ -431,9 +427,7 @@ async def test_progress_bars_by_file(db_session):
     await save_read_progress(db_session, user.id, f2.id, page=0, page_count=20)
     # f3 is unread.
 
-    bars = await progress_bars_by_file(
-        db_session, user.id, [f1.id, f2.id, f3.id]
-    )
+    bars = await progress_bars_by_file(db_session, user.id, [f1.id, f2.id, f3.id])
     assert set(bars) == {f1.id}
     assert bars[f1.id].percent == 30  # page 6 of 20
 

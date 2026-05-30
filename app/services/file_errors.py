@@ -118,16 +118,12 @@ async def clear_errors_for_path(db: AsyncSession, path: str) -> int:
     just been re-checked and didn't fail. Returns the count deleted so
     callers can log it if useful.
     """
-    result = await db.execute(
-        delete(FileError).where(FileError.path == path)
-    )
+    result = await db.execute(delete(FileError).where(FileError.path == path))
     await db.commit()
     return result.rowcount or 0
 
 
-async def clear_error_for_path_and_kind(
-    db: AsyncSession, path: str, kind: FileErrorKind
-) -> int:
+async def clear_error_for_path_and_kind(db: AsyncSession, path: str, kind: FileErrorKind) -> int:
     """Drop just the ``(path, kind)`` row.
 
     Used by out-of-band success paths that don't have the scanner's
@@ -136,9 +132,7 @@ async def clear_error_for_path_and_kind(
     open + ComicInfo parse also succeeded.
     """
     result = await db.execute(
-        delete(FileError)
-        .where(FileError.path == path)
-        .where(FileError.kind == kind.value)
+        delete(FileError).where(FileError.path == path).where(FileError.kind == kind.value)
     )
     await db.commit()
     return result.rowcount or 0
@@ -168,22 +162,16 @@ async def list_file_errors(db: AsyncSession) -> list[FileErrorRow]:
 
 async def count_file_errors(db: AsyncSession) -> int:
     """Total row count — feeds the admin Health page stat."""
-    return (
-        await db.execute(select(func.count()).select_from(FileError))
-    ).scalar_one() or 0
+    return (await db.execute(select(func.count()).select_from(FileError))).scalar_one() or 0
 
 
 # ---- Admin actions ----------------------------------------------------
 
 
-async def dismiss_file_error(
-    db: AsyncSession, error_id: uuid.UUID
-) -> bool:
+async def dismiss_file_error(db: AsyncSession, error_id: uuid.UUID) -> bool:
     """Delete one row without retrying. Returns False if it was
     already gone (race with a concurrent scan that cleared it)."""
-    result = await db.execute(
-        delete(FileError).where(FileError.id == error_id)
-    )
+    result = await db.execute(delete(FileError).where(FileError.id == error_id))
     await db.commit()
     return bool(result.rowcount)
 
@@ -203,9 +191,7 @@ class TryOpenResult:
     error_message: str | None = None
 
 
-async def try_open_archive(
-    db: AsyncSession, error_id: uuid.UUID
-) -> TryOpenResult | None:
+async def try_open_archive(db: AsyncSession, error_id: uuid.UUID) -> TryOpenResult | None:
     """Run ``open_archive`` against a recorded path and update the row.
 
     On success the (path, kind) row is deleted (and, if it was an

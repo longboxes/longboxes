@@ -112,12 +112,8 @@ def test_crop_result_is_no_longer_a_wraparound():
 
 def test_threshold_boundary():
     h = 1000
-    just_under = make_image_bytes(
-        int(h * (WRAPAROUND_ASPECT_THRESHOLD - 0.05)), h
-    )
-    just_over = make_image_bytes(
-        int(h * (WRAPAROUND_ASPECT_THRESHOLD + 0.05)), h
-    )
+    just_under = make_image_bytes(int(h * (WRAPAROUND_ASPECT_THRESHOLD - 0.05)), h)
+    just_over = make_image_bytes(int(h * (WRAPAROUND_ASPECT_THRESHOLD + 0.05)), h)
     assert inspect_cover(just_under).is_wraparound is False
     assert inspect_cover(just_over).is_wraparound is True
     assert crop_to_front(just_under) is None
@@ -151,9 +147,7 @@ def test_extract_cover_crops_wraparound(tmp_path: Path, backend: str):
 
 
 @pytest.mark.parametrize("backend", ["comicbox", "stdlib"])
-def test_extract_cover_passes_through_normal_cover(
-    tmp_path: Path, backend: str
-):
+def test_extract_cover_passes_through_normal_cover(tmp_path: Path, backend: str):
     """A normal portrait cover is served unchanged — no crop."""
     from app.review.routes import _extract_cover_cached
 

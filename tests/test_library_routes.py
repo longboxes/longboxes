@@ -20,9 +20,7 @@ async def _login_viewer(client, db_session):
         )
     )
     await db_session.commit()
-    r = await client.post(
-        "/login", data={"username": "alice", "password": "viewerpass1"}
-    )
+    r = await client.post("/login", data={"username": "alice", "password": "viewerpass1"})
     assert r.status_code == 303
 
 
@@ -89,16 +87,12 @@ async def test_volume_credits_hydration_skips_stub_volumes(client, db_session):
         )
     )
     await db_session.commit()
-    r = await client.get(
-        "/volume-credits/hydration", params={"ids": "8001"}
-    )
+    r = await client.get("/volume-credits/hydration", params={"ids": "8001"})
     assert r.status_code == 200
     assert r.json() == {"swaps": [], "completed_ids": []}
 
 
-async def test_volume_credits_hydration_returns_swap_when_hydrated(
-    client, db_session
-):
+async def test_volume_credits_hydration_returns_swap_when_hydrated(client, db_session):
     """A non-stub volume returns a swap targeting
     ``volume-credit-<cv_id>`` with the credit link param baked in."""
     await _login_viewer(client, db_session)
@@ -140,9 +134,7 @@ async def test_volume_credits_hydration_returns_swap_when_hydrated(
     assert "example.com/h.jpg" in swap["html"]
 
 
-async def test_volume_credits_hydration_handles_missing_credit_param(
-    client, db_session
-):
+async def test_volume_credits_hydration_handles_missing_credit_param(client, db_session):
     """No ``credit`` query param → swap link is bare ``/volume/{id}``
     (used by surfaces that don't apply a credit filter)."""
     await _login_viewer(client, db_session)
@@ -158,9 +150,7 @@ async def test_volume_credits_hydration_handles_missing_credit_param(
     )
     await db_session.commit()
 
-    r = await client.get(
-        "/volume-credits/hydration", params={"ids": "8201"}
-    )
+    r = await client.get("/volume-credits/hydration", params={"ids": "8201"})
     assert r.status_code == 200
     swap = r.json()["swaps"][0]
     assert "/volume/8201" in swap["html"]

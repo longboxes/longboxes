@@ -84,6 +84,7 @@ def _parse_hydration_keys(raw: str) -> list[tuple[str, int]]:
         out.append((kind, cv_id))
     return out
 
+
 router = APIRouter()
 
 
@@ -161,7 +162,9 @@ def _enqueue_stub_hydration(results: SearchResults) -> None:
 
     logger.info(
         "search: enqueueing %d stub hydration(s) for q=%r: %s",
-        len(targets), results.query, targets,
+        len(targets),
+        results.query,
+        targets,
     )
     for entity_type, cv_id in targets:
         try:
@@ -169,7 +172,9 @@ def _enqueue_stub_hydration(results: SearchResults) -> None:
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(
                 "search: enqueue_revalidate(%r, %r) failed: %s",
-                entity_type, cv_id, exc,
+                entity_type,
+                cv_id,
+                exc,
             )
 
 
@@ -196,9 +201,7 @@ async def search_page(
     """
     only_kind = kind if kind in SECTION_KEYS else None
     limit = KIND_FILTER_LIMIT if only_kind else PAGE_LIMIT_PER_KIND
-    results = await search_library(
-        db, q, limit_per_kind=limit, only_kind=only_kind
-    )
+    results = await search_library(db, q, limit_per_kind=limit, only_kind=only_kind)
     # Kick off background hydration for any stub rows the search
     # surfaced (CvVolume ``_stub`` placeholders + credit-walk
     # character/creator/team/arc rows with no cv_* table entry yet).
@@ -279,12 +282,12 @@ async def search_comicvine_page(
         # handles the request_key hash + cv_search_cache TTL.
         client = ComicVineClient()
         try:
-            cv_cache = ComicVineCache(
-                client, enqueue_revalidate=enqueue_revalidate
-            )
+            cv_cache = ComicVineCache(client, enqueue_revalidate=enqueue_revalidate)
             try:
                 results = await cv_search_catalogue(
-                    db, cv_cache, q,
+                    db,
+                    cv_cache,
+                    q,
                     limit_per_kind=limit,
                     only_kind=only_kind,
                 )
@@ -312,9 +315,7 @@ async def search_comicvine_page(
     )
 
 
-def _cv_search_error_response(
-    request: Request, user, err: ComicVineError
-):
+def _cv_search_error_response(request: Request, user, err: ComicVineError):
     """Friendly error page for /search/comicvine failures. Same shape
     as ``_cv_error_response`` in library_browse, with copy tuned for
     the search use case (the user can fall back to library results)."""

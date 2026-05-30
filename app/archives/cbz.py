@@ -32,8 +32,7 @@ class CbzReader:
                 return [
                     info.filename
                     for info in zf.infolist()
-                    if not info.is_dir()
-                    and Path(info.filename).suffix.lower() in PAGE_EXTENSIONS
+                    if not info.is_dir() and Path(info.filename).suffix.lower() in PAGE_EXTENSIONS
                 ]
         except zipfile.BadZipFile as e:
             raise ArchiveError(f"corrupt CBZ: {self.path}") from e

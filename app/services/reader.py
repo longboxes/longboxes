@@ -101,9 +101,7 @@ async def get_reading_direction(db: AsyncSession, file_id: uuid.UUID) -> str:
     return volume.reading_direction or DEFAULT_READING_DIRECTION
 
 
-async def set_reading_direction(
-    db: AsyncSession, file_id: uuid.UUID, direction: str
-) -> bool:
+async def set_reading_direction(db: AsyncSession, file_id: uuid.UUID, direction: str) -> bool:
     """Persist ``direction`` onto the file's owning volume.
 
     Returns ``True`` when a volume was updated, ``False`` when the file
@@ -134,17 +132,17 @@ async def set_reading_direction(
 # don't have one, so tracking progress there strands the user without
 # a way to clear it. Updated when MatchStatus grows a new "resolved"
 # variant.
-_TRACKING_STATUSES: frozenset[str] = frozenset({
-    MatchStatus.AUTO.value,
-    MatchStatus.CONFIRMED.value,
-    MatchStatus.LOCAL.value,
-    MatchStatus.SUPPLEMENT.value,
-})
+_TRACKING_STATUSES: frozenset[str] = frozenset(
+    {
+        MatchStatus.AUTO.value,
+        MatchStatus.CONFIRMED.value,
+        MatchStatus.LOCAL.value,
+        MatchStatus.SUPPLEMENT.value,
+    }
+)
 
 
-async def is_file_match_resolved(
-    db: AsyncSession, file_id: uuid.UUID
-) -> bool:
+async def is_file_match_resolved(db: AsyncSession, file_id: uuid.UUID) -> bool:
     """True if the file has a match in one of the
     progress-trackable statuses (``_TRACKING_STATUSES``).
 
@@ -190,19 +188,13 @@ async def save_read_progress(
     progress.page = page
     progress.page_count = page_count
     progress.updated_at = now
-    if (
-        progress.finished_at is None
-        and page_count > 0
-        and page >= page_count - 1
-    ):
+    if progress.finished_at is None and page_count > 0 and page >= page_count - 1:
         progress.finished_at = now
     await db.commit()
     return progress
 
 
-async def reset_read_progress(
-    db: AsyncSession, user_id: uuid.UUID, file_id: uuid.UUID
-) -> bool:
+async def reset_read_progress(db: AsyncSession, user_id: uuid.UUID, file_id: uuid.UUID) -> bool:
     """Clear the user's saved reading position for a file.
 
     Returns ``True`` if a row was removed, ``False`` when there was
@@ -274,14 +266,8 @@ def progress_bar(progress: ReadProgress | None) -> ProgressBar | None:
         return None
     if progress.page_count <= 0:
         return ProgressBar(100 if finished else 0, finished, "")
-    percent = min(
-        100, round(100 * (progress.page + 1) / progress.page_count)
-    )
-    label = (
-        "Finished"
-        if finished
-        else f"Page {progress.page + 1} of {progress.page_count}"
-    )
+    percent = min(100, round(100 * (progress.page + 1) / progress.page_count))
+    label = "Finished" if finished else f"Page {progress.page + 1} of {progress.page_count}"
     return ProgressBar(percent, finished, label)
 
 
@@ -344,18 +330,12 @@ async def _file_card_label(
 
     # Unmatched / unresolved — show the filename so the card is not blank.
     path = (
-        await db.execute(
-            select(FileLocation.path)
-            .where(FileLocation.file_id == file_id)
-            .limit(1)
-        )
+        await db.execute(select(FileLocation.path).where(FileLocation.file_id == file_id).limit(1))
     ).scalar_one_or_none()
     return (Path(path).name if path else "Unknown file", None, None)
 
 
-async def _progress_cards(
-    db: AsyncSession, rows: list[ReadProgress]
-) -> list[ReadingProgressCard]:
+async def _progress_cards(db: AsyncSession, rows: list[ReadProgress]) -> list[ReadingProgressCard]:
     """Build display cards for a set of progress rows."""
     cards: list[ReadingProgressCard] = []
     for row in rows:
@@ -483,20 +463,14 @@ async def issue_progress_for_volume(
         await db.execute(
             select(FileMatch.issue_cv_id, FileMatch.file_id)
             .where(FileMatch.issue_cv_id.in_(issue_cv_ids))
-            .where(
-                FileMatch.status.in_(
-                    (MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)
-                )
-            )
+            .where(FileMatch.status.in_((MatchStatus.AUTO.value, MatchStatus.CONFIRMED.value)))
         )
     ).all()
     # One representative file per issue — first match wins.
     issue_to_file: dict[int, Any] = {}
     for issue_cv_id, file_id in rows:
         issue_to_file.setdefault(issue_cv_id, file_id)
-    bars = await progress_bars_by_file(
-        db, user_id, list(issue_to_file.values())
-    )
+    bars = await progress_bars_by_file(db, user_id, list(issue_to_file.values()))
     return {
         issue_cv_id: bars[file_id]
         for issue_cv_id, file_id in issue_to_file.items()

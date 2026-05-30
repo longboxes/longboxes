@@ -84,14 +84,14 @@ class RailBranch:
 
     # Top edge: how the branch enters the visible window. Exactly one
     # of these flags is True for any non-empty branch.
-    top_diverge: bool = False                # bend from spine — arc starts here
-    top_enters_from_prev_vol: bool = False   # arrow — prev member elsewhere
-    top_fades: bool = False                  # vertical line continues above window
+    top_diverge: bool = False  # bend from spine — arc starts here
+    top_enters_from_prev_vol: bool = False  # arrow — prev member elsewhere
+    top_fades: bool = False  # vertical line continues above window
 
     # Bottom edge: mirror of top.
-    bottom_merge: bool = False               # bend to spine — arc ends here
-    bottom_exits_to_next_vol: bool = False   # arrow — next member elsewhere
-    bottom_fades: bool = False               # vertical line continues below window
+    bottom_merge: bool = False  # bend to spine — arc ends here
+    bottom_exits_to_next_vol: bool = False  # arrow — next member elsewhere
+    bottom_fades: bool = False  # vertical line continues below window
 
     @property
     def has_gaps(self) -> bool:
@@ -101,11 +101,7 @@ class RailBranch:
     @property
     def is_external(self) -> bool:
         """True when this arc touches another volume in any way."""
-        return (
-            self.top_enters_from_prev_vol
-            or self.bottom_exits_to_next_vol
-            or self.has_gaps
-        )
+        return self.top_enters_from_prev_vol or self.bottom_exits_to_next_vol or self.has_gaps
 
 
 @dataclass
@@ -123,13 +119,13 @@ class RailModel:
         when populated, falling back to the uniform formula otherwise.
     """
 
-    width: int           # px — total SVG width
-    height: int          # px — total SVG height
-    row_height: int      # px — uniform-pitch spacing (List view); falls
-                         # through to row_y_centers when set (Gallery)
-    spine_x: int         # px — x-coord of the spine line
-    lane_spacing: int    # px — horizontal spacing between lanes
-    bend_offset: int     # px — vertical span of diverge/merge bends
+    width: int  # px — total SVG width
+    height: int  # px — total SVG height
+    row_height: int  # px — uniform-pitch spacing (List view); falls
+    # through to row_y_centers when set (Gallery)
+    spine_x: int  # px — x-coord of the spine line
+    lane_spacing: int  # px — horizontal spacing between lanes
+    bend_offset: int  # px — vertical span of diverge/merge bends
     branches: list[RailBranch] = field(default_factory=list)
     # Rows where 2+ branches share a node — get a faint horizontal
     # connector. Each entry is (row_index, sorted node x-coords).
@@ -167,9 +163,7 @@ def build_list_rail(
     """
     window_ids = {issue.cv_id for issue in window_issues}
     row_for_cv_id = {issue.cv_id: i for i, issue in enumerate(window_issues)}
-    color_for_aid = {
-        aid: arc_hex_for_index(idx) for idx, aid in enumerate(arc_display_order)
-    }
+    color_for_aid = {aid: arc_hex_for_index(idx) for idx, aid in enumerate(arc_display_order)}
 
     branches: list[RailBranch] = []
 
@@ -186,11 +180,14 @@ def build_list_rail(
             if mid is None:
                 continue
             mid_int = int(mid)
-            member_info.append((
-                pos, mid_int,
-                mid_int in in_volume_issue_ids,
-                mid_int in window_ids,
-            ))
+            member_info.append(
+                (
+                    pos,
+                    mid_int,
+                    mid_int in in_volume_issue_ids,
+                    mid_int in window_ids,
+                )
+            )
 
         in_window_entries = [(pos, mid) for (pos, mid, _vol, win) in member_info if win]
         if not in_window_entries:
@@ -214,26 +211,24 @@ def build_list_rail(
                     if mid_j is not None and int(mid_j) not in in_volume_issue_ids:
                         gap_after = True
                         break
-            nodes.append(RailNode(
-                arc_cv_id=aid,
-                row_index=row_for_cv_id[mid],
-                cv_id=mid,
-                gap_after=gap_after,
-            ))
+            nodes.append(
+                RailNode(
+                    arc_cv_id=aid,
+                    row_index=row_for_cv_id[mid],
+                    cv_id=mid,
+                    gap_after=gap_after,
+                )
+            )
 
         # Top edge — based on what (if anything) precedes the first
         # in-window node in the arc.
         first_arc_pos = nodes[0].arc_cv_id  # placeholder, real value below
         first_arc_pos = in_window_entries[0][0]
         any_prev_out_of_volume = any(
-            not vol
-            for (pos, _mid, vol, _win) in member_info
-            if pos < first_arc_pos
+            not vol for (pos, _mid, vol, _win) in member_info if pos < first_arc_pos
         )
         any_prev_in_volume = any(
-            vol
-            for (pos, _mid, vol, _win) in member_info
-            if pos < first_arc_pos
+            vol for (pos, _mid, vol, _win) in member_info if pos < first_arc_pos
         )
 
         top_diverge = False
@@ -251,14 +246,10 @@ def build_list_rail(
         # Bottom edge — mirror.
         last_arc_pos = in_window_entries[-1][0]
         any_next_out_of_volume = any(
-            not vol
-            for (pos, _mid, vol, _win) in member_info
-            if pos > last_arc_pos
+            not vol for (pos, _mid, vol, _win) in member_info if pos > last_arc_pos
         )
         any_next_in_volume = any(
-            vol
-            for (pos, _mid, vol, _win) in member_info
-            if pos > last_arc_pos
+            vol for (pos, _mid, vol, _win) in member_info if pos > last_arc_pos
         )
 
         bottom_merge = False
@@ -340,18 +331,12 @@ def build_list_rail(
         for node in branch.nodes:
             rows_to_xs.setdefault(node.row_index, set()).add(lane_x)
     multi_arc_rows = sorted(
-        (
-            (row_idx, sorted(xs_set))
-            for row_idx, xs_set in rows_to_xs.items()
-            if len(xs_set) >= 2
-        ),
+        ((row_idx, sorted(xs_set)) for row_idx, xs_set in rows_to_xs.items() if len(xs_set) >= 2),
         key=lambda x: x[0],
     )
 
     height = len(window_issues) * row_height
-    row_y_centers = [
-        int((r + 0.5) * row_height) for r in range(len(window_issues))
-    ]
+    row_y_centers = [int((r + 0.5) * row_height) for r in range(len(window_issues))]
 
     return RailModel(
         width=width,
@@ -401,9 +386,7 @@ def build_gallery_rail(
     continuation. Self-contained single-shelf arcs stay silent — the
     gallery shelf container already conveys their full story.
     """
-    color_for_aid = {
-        aid: arc_hex_for_index(idx) for idx, aid in enumerate(arc_display_order)
-    }
+    color_for_aid = {aid: arc_hex_for_index(idx) for idx, aid in enumerate(arc_display_order)}
 
     if window_hi is None:
         # Default: assume every issue is visible (used for unit tests
@@ -423,9 +406,7 @@ def build_gallery_rail(
         visible_start = max(seg.first_volume_idx, window_lo)
         visible_end = min(seg.last_volume_idx + 1, window_hi)
         visible_count = max(0, visible_end - visible_start)
-        cover_rows = max(
-            1, (visible_count + covers_per_row - 1) // covers_per_row
-        )
+        cover_rows = max(1, (visible_count + covers_per_row - 1) // covers_per_row)
         # depth = number of nested arc containers around the cover grid.
         # No-arc segments still have one layer of p-2 padding around the
         # ul, so default to 1.
@@ -460,9 +441,7 @@ def build_gallery_rail(
             continue
         color = color_for_aid.get(aid, _ARC_HEX_PALETTE[0])
 
-        arc_member_ids = {
-            int(m["id"]) for m in members if m.get("id") is not None
-        }
+        arc_member_ids = {int(m["id"]) for m in members if m.get("id") is not None}
 
         # Branch-appearance rule: spans multiple shelves OR has any
         # out-of-volume member anywhere. Compared against the FULL
@@ -476,8 +455,7 @@ def build_gallery_rail(
             continue
         spans_multiple_shelves = len(all_shelves_with_arc) > 1
         has_external = any(
-            m.get("id") is not None and int(m["id"]) not in in_volume_issue_ids
-            for m in members
+            m.get("id") is not None and int(m["id"]) not in in_volume_issue_ids for m in members
         )
         if not (spans_multiple_shelves or has_external):
             continue
@@ -505,24 +483,28 @@ def build_gallery_rail(
             if prev_shelf_idx is not None and nodes:
                 prev_seg = visible_segments[prev_shelf_idx]
                 prev_last_mid = max(
-                    (issue.cv_id for issue in prev_seg.issues
-                     if issue.cv_id in arc_member_ids),
+                    (issue.cv_id for issue in prev_seg.issues if issue.cv_id in arc_member_ids),
                     default=None,
                 )
                 curr_first_mid = min(
-                    (issue.cv_id for issue in seg.issues
-                     if issue.cv_id in arc_member_ids),
+                    (issue.cv_id for issue in seg.issues if issue.cv_id in arc_member_ids),
                     default=None,
                 )
                 if prev_last_mid is not None and curr_first_mid is not None:
                     prev_pos = next(
-                        (i for i, m in enumerate(members)
-                         if m.get("id") and int(m["id"]) == prev_last_mid),
+                        (
+                            i
+                            for i, m in enumerate(members)
+                            if m.get("id") and int(m["id"]) == prev_last_mid
+                        ),
                         None,
                     )
                     curr_pos = next(
-                        (i for i, m in enumerate(members)
-                         if m.get("id") and int(m["id"]) == curr_first_mid),
+                        (
+                            i
+                            for i, m in enumerate(members)
+                            if m.get("id") and int(m["id"]) == curr_first_mid
+                        ),
                         None,
                     )
                     if prev_pos is not None and curr_pos is not None:
@@ -537,26 +519,33 @@ def build_gallery_rail(
             # Representative cv_id for ARIA / hover — first in-arc
             # issue in this shelf.
             rep_cv_id = next(
-                (issue.cv_id for issue in seg.issues
-                 if issue.cv_id in arc_member_ids),
+                (issue.cv_id for issue in seg.issues if issue.cv_id in arc_member_ids),
                 seg.issues[0].cv_id,
             )
-            nodes.append(RailNode(
-                arc_cv_id=aid,
-                row_index=shelf_visible_idx,
-                cv_id=rep_cv_id,
-            ))
+            nodes.append(
+                RailNode(
+                    arc_cv_id=aid,
+                    row_index=shelf_visible_idx,
+                    cv_id=rep_cv_id,
+                )
+            )
             prev_shelf_idx = shelf_visible_idx
 
         # Edge treatments.
         first_arc_pos = next(
-            (i for i, m in enumerate(members)
-             if m.get("id") and int(m["id"]) in in_volume_issue_ids),
+            (
+                i
+                for i, m in enumerate(members)
+                if m.get("id") and int(m["id"]) in in_volume_issue_ids
+            ),
             None,
         )
         last_arc_pos = next(
-            (len(members) - 1 - i for i, m in enumerate(reversed(members))
-             if m.get("id") and int(m["id"]) in in_volume_issue_ids),
+            (
+                len(members) - 1 - i
+                for i, m in enumerate(reversed(members))
+                if m.get("id") and int(m["id"]) in in_volume_issue_ids
+            ),
             None,
         )
         any_prev_out_of_volume = first_arc_pos is not None and any(
@@ -565,25 +554,17 @@ def build_gallery_rail(
         )
         any_next_out_of_volume = last_arc_pos is not None and any(
             m.get("id") is not None and int(m["id"]) not in in_volume_issue_ids
-            for m in members[last_arc_pos + 1:]
+            for m in members[last_arc_pos + 1 :]
         )
 
         # Translate visible-shelf indices to global shelf indices to
         # tell whether the arc extends above/below the current window.
         first_in_window_visible = in_window_shelf_indices[0]
         last_in_window_visible = in_window_shelf_indices[-1]
-        first_in_window_global = all_segments.index(
-            visible_segments[first_in_window_visible]
-        )
-        last_in_window_global = all_segments.index(
-            visible_segments[last_in_window_visible]
-        )
-        arc_extends_above_window = (
-            first_in_window_global > all_shelves_with_arc[0]
-        )
-        arc_extends_below_window = (
-            last_in_window_global < all_shelves_with_arc[-1]
-        )
+        first_in_window_global = all_segments.index(visible_segments[first_in_window_visible])
+        last_in_window_global = all_segments.index(visible_segments[last_in_window_visible])
+        arc_extends_above_window = first_in_window_global > all_shelves_with_arc[0]
+        arc_extends_below_window = last_in_window_global < all_shelves_with_arc[-1]
 
         top_diverge = False
         top_enters_from_prev_vol = False
@@ -605,17 +586,19 @@ def build_gallery_rail(
         else:
             bottom_merge = True
 
-        branches.append(RailBranch(
-            arc=arc,
-            color=color,
-            nodes=nodes,
-            top_diverge=top_diverge,
-            top_enters_from_prev_vol=top_enters_from_prev_vol,
-            top_fades=top_fades,
-            bottom_merge=bottom_merge,
-            bottom_exits_to_next_vol=bottom_exits_to_next_vol,
-            bottom_fades=bottom_fades,
-        ))
+        branches.append(
+            RailBranch(
+                arc=arc,
+                color=color,
+                nodes=nodes,
+                top_diverge=top_diverge,
+                top_enters_from_prev_vol=top_enters_from_prev_vol,
+                top_fades=top_fades,
+                bottom_merge=bottom_merge,
+                bottom_exits_to_next_vol=bottom_exits_to_next_vol,
+                bottom_fades=bottom_fades,
+            )
+        )
 
     # Lane assignment — same two-stack split as the list rail.
     branches.sort(key=lambda b: b.nodes[0].row_index)
@@ -637,13 +620,9 @@ def build_gallery_rail(
     num_left_lanes = len(left_lanes)
     num_right_lanes = len(right_lanes)
     gap_clearance = 28
-    spine_x_final = (
-        num_left_lanes * lane_spacing + gap_clearance + 8
-        if num_left_lanes else 14
-    )
+    spine_x_final = num_left_lanes * lane_spacing + gap_clearance + 8 if num_left_lanes else 14
     right_extent = (
-        (num_right_lanes + 1) * lane_spacing + gap_clearance + 8
-        if num_right_lanes else 14
+        (num_right_lanes + 1) * lane_spacing + gap_clearance + 8 if num_right_lanes else 14
     )
     width = spine_x_final + right_extent
 
@@ -657,11 +636,7 @@ def build_gallery_rail(
         for node in branch.nodes:
             rows_to_xs.setdefault(node.row_index, set()).add(lane_x)
     multi_arc_rows = sorted(
-        (
-            (row_idx, sorted(xs_set))
-            for row_idx, xs_set in rows_to_xs.items()
-            if len(xs_set) >= 2
-        ),
+        ((row_idx, sorted(xs_set)) for row_idx, xs_set in rows_to_xs.items() if len(xs_set) >= 2),
         key=lambda x: x[0],
     )
 

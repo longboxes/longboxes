@@ -84,11 +84,7 @@ async def admin_home(
     page_size = await get_page_size(db)
     archive_backend = await get_archive_backend(db)
     recent_volumes = (
-        (
-            await db.execute(
-                select(CvVolume).order_by(CvVolume.fetched_at.desc()).limit(10)
-            )
-        )
+        (await db.execute(select(CvVolume).order_by(CvVolume.fetched_at.desc()).limit(10)))
         .scalars()
         .all()
     )
@@ -245,9 +241,7 @@ async def admin_failed_jobs_clear_all(_: RequireAdminDep):
 # a sticky exception class (16 stale FK violations, every
 # UnboundLocalError, etc.) in one click instead of N.
 @router.post("/failed-jobs/by-class/requeue")
-async def admin_failed_jobs_requeue_by_class(
-    _: RequireAdminDep, exc_class: Annotated[str, Form()]
-):
+async def admin_failed_jobs_requeue_by_class(_: RequireAdminDep, exc_class: Annotated[str, Form()]):
     count = requeue_failed_jobs_by_class(exc_class)
     return RedirectResponse(
         url=f"/admin/failed-jobs?requeued_all={count}",
@@ -256,9 +250,7 @@ async def admin_failed_jobs_requeue_by_class(
 
 
 @router.post("/failed-jobs/by-class/clear")
-async def admin_failed_jobs_clear_by_class(
-    _: RequireAdminDep, exc_class: Annotated[str, Form()]
-):
+async def admin_failed_jobs_clear_by_class(_: RequireAdminDep, exc_class: Annotated[str, Form()]):
     count = clear_failed_jobs_by_class(exc_class)
     return RedirectResponse(
         url=f"/admin/failed-jobs?cleared_all={count}",
@@ -509,9 +501,7 @@ async def match_all(_: RequireAdminDep, db: DbSessionDep):
     from app.jobs.match_file import enqueue_match_all_unmatched_async
 
     count = await enqueue_match_all_unmatched_async(db)
-    return RedirectResponse(
-        url=f"/admin?match_all_queued={count}", status_code=303
-    )
+    return RedirectResponse(url=f"/admin?match_all_queued={count}", status_code=303)
 
 
 @router.post("/cv-key")
@@ -586,13 +576,9 @@ async def add_volume(
         except ComicVineKeyInvalidError:
             # The key is set but CV rejected it. Surface distinctly so the
             # admin knows to re-paste rather than to chase a different bug.
-            return RedirectResponse(
-                url="/admin?volume_error=invalid_key", status_code=303
-            )
+            return RedirectResponse(url="/admin?volume_error=invalid_key", status_code=303)
         except ComicVineNotFoundError:
-            return RedirectResponse(
-                url="/admin?volume_error=not_found", status_code=303
-            )
+            return RedirectResponse(url="/admin?volume_error=not_found", status_code=303)
         except ComicVineError as e:
             # Catch-all: rate limit, network, malformed response.
             return RedirectResponse(
@@ -624,13 +610,9 @@ async def save_page_size(
     try:
         n = int(page_size.strip())
     except ValueError:
-        return RedirectResponse(
-            url="/admin?page_size=bad_value", status_code=303
-        )
+        return RedirectResponse(url="/admin?page_size=bad_value", status_code=303)
     if n < MIN_PAGE_SIZE or n > MAX_PAGE_SIZE:
-        return RedirectResponse(
-            url="/admin?page_size=out_of_range", status_code=303
-        )
+        return RedirectResponse(url="/admin?page_size=out_of_range", status_code=303)
     await set_page_size(db, n)
     await db.commit()
     return RedirectResponse(url="/admin?page_size=saved", status_code=303)
@@ -649,13 +631,9 @@ async def save_archive_backend(
     try:
         await set_archive_backend(db, backend.strip())
     except ValueError:
-        return RedirectResponse(
-            url="/admin?archive_backend=bad_value", status_code=303
-        )
+        return RedirectResponse(url="/admin?archive_backend=bad_value", status_code=303)
     await db.commit()
-    return RedirectResponse(
-        url="/admin?archive_backend=saved", status_code=303
-    )
+    return RedirectResponse(url="/admin?archive_backend=saved", status_code=303)
 
 
 @router.post("/cache/clear")
@@ -691,18 +669,13 @@ async def clear_cv_cache(
         (CvPublisher, "publisher"),
     ]:
         result = await db.execute(
-            update(model)
-            .where(model.fetched_at.is_not(None))
-            .values(fetched_at=None)
+            update(model).where(model.fetched_at.is_not(None)).values(fetched_at=None)
         )
         counts[label] = int(result.rowcount or 0)
     await db.commit()
     # Encode counts as ``v=1&i=2&a=3&p=4`` so the admin home banner
     # can show a per-entity tally without parsing dict-form values.
     summary = (
-        f"v={counts['volume']}&i={counts['issue']}"
-        f"&a={counts['story_arc']}&p={counts['publisher']}"
+        f"v={counts['volume']}&i={counts['issue']}&a={counts['story_arc']}&p={counts['publisher']}"
     )
-    return RedirectResponse(
-        url=f"/admin?cache_cleared=1&{summary}", status_code=303
-    )
+    return RedirectResponse(url=f"/admin?cache_cleared=1&{summary}", status_code=303)

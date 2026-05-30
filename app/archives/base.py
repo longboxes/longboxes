@@ -131,6 +131,7 @@ def open_archive(
     if backend == "stdlib":
         from app.archives.cbr import CbrReader
         from app.archives.cbz import CbzReader
+
         if fmt is ArchiveFormat.CBZ:
             return CbzReader(Path(path))
         if fmt is ArchiveFormat.CBR:
@@ -145,12 +146,11 @@ def open_archive(
     # Default: comicbox backend. One reader handles every supported
     # format; CB7 / PDF stop raising UnsupportedArchiveError here.
     from app.archives.comicbox_reader import ComicboxReader
+
     return ComicboxReader(Path(path))
 
 
-def resolve_cover_page_name(
-    reader: ArchiveReader, *, pages: list[str] | None = None
-) -> str | None:
+def resolve_cover_page_name(reader: ArchiveReader, *, pages: list[str] | None = None) -> str | None:
     """Return the archive entry name of ``reader``'s cover page.
 
     Prefers a comicbox-backed reader's ``cover_filename()`` — which

@@ -83,11 +83,19 @@ def test_score_real_issue_beats_fragment_regardless_of_format():
     Page-count plausibility is now the top tier — a fragment can't
     outrank a real issue on any lower-tier signal."""
     real_cbr = _file(
-        fmt="cbr", pages=25, cw=1920, ch=2951, size=23 * 1024 * 1024,
+        fmt="cbr",
+        pages=25,
+        cw=1920,
+        ch=2951,
+        size=23 * 1024 * 1024,
         ci=ComicInfoStatus.FULL_WITH_CVID,
     )
     sketch_cbz = _file(
-        fmt="cbz", pages=3, cw=1400, ch=2120, size=1_400_000,
+        fmt="cbz",
+        pages=3,
+        cw=1400,
+        ch=2120,
+        size=1_400_000,
         ci=ComicInfoStatus.FULL_WITH_CVID,
     )
     assert _score(real_cbr) > _score(sketch_cbz)
@@ -121,11 +129,19 @@ def test_score_prefers_interior_resolution_over_cover():
     file has a HUGE interior, beating the big-cover file with a
     tiny interior."""
     rich_interior = _file(
-        pages=25, cw=800, ch=1200, iw=2400, ih=3600,
+        pages=25,
+        cw=800,
+        ch=1200,
+        iw=2400,
+        ih=3600,
         size=10 * 1024 * 1024,
     )
     tiny_interior = _file(
-        pages=25, cw=2400, ch=3600, iw=600, ih=900,
+        pages=25,
+        cw=2400,
+        ch=3600,
+        iw=600,
+        ih=900,
         size=10 * 1024 * 1024,
     )
     assert _score(rich_interior) > _score(tiny_interior)
@@ -137,10 +153,8 @@ def test_score_falls_back_to_cover_when_interior_missing():
     resolution signal: the cover area. So a big-cover legacy file
     beats a small-cover legacy file at the resolution tier even
     though neither has an interior sample."""
-    big_cover = _file(pages=25, cw=1920, ch=2951, iw=None, ih=None,
-                      size=10 * 1024 * 1024)
-    small_cover = _file(pages=25, cw=1280, ch=1960, iw=None, ih=None,
-                        size=10 * 1024 * 1024)
+    big_cover = _file(pages=25, cw=1920, ch=2951, iw=None, ih=None, size=10 * 1024 * 1024)
+    small_cover = _file(pages=25, cw=1280, ch=1960, iw=None, ih=None, size=10 * 1024 * 1024)
     assert _score(big_cover) > _score(small_cover)
 
 
@@ -151,11 +165,19 @@ def test_score_file_with_interior_compares_against_legacy_cover():
     one. A 2400x3600 interior beats a 1280x1960 cover — the
     fallback is a *fallback*, not a penalty."""
     new_with_interior = _file(
-        pages=25, cw=600, ch=900, iw=2400, ih=3600,
+        pages=25,
+        cw=600,
+        ch=900,
+        iw=2400,
+        ih=3600,
         size=10 * 1024 * 1024,
     )
     legacy_big_cover = _file(
-        pages=25, cw=1280, ch=1960, iw=None, ih=None,
+        pages=25,
+        cw=1280,
+        ch=1960,
+        iw=None,
+        ih=None,
         size=10 * 1024 * 1024,
     )
     assert _score(new_with_interior) > _score(legacy_big_cover)
@@ -210,8 +232,9 @@ def test_score_suspect_page_count_beats_fragment():
     back-half splits, two-page previews — still beats a single-digit
     fragment. Both lose to a real issue (>=15)."""
     suspect = _file(pages=10, cw=1600, ch=2400, size=5 * 1024 * 1024)
-    fragment = _file(pages=2, cw=4000, ch=6000, size=50 * 1024 * 1024,
-                     ci=ComicInfoStatus.FULL_WITH_CVID)
+    fragment = _file(
+        pages=2, cw=4000, ch=6000, size=50 * 1024 * 1024, ci=ComicInfoStatus.FULL_WITH_CVID
+    )
     real = _file(pages=25, cw=1600, ch=2400, size=5 * 1024 * 1024)
     assert _score(real) > _score(suspect) > _score(fragment)
 
@@ -336,9 +359,7 @@ def _cv_issue(cv_id: int, volume_cv_id: int, number: str = "1") -> CvIssue:
     )
 
 
-def _cv_issue_with_cover(
-    cv_id: int, volume_cv_id: int, number: str = "1"
-) -> CvIssue:
+def _cv_issue_with_cover(cv_id: int, volume_cv_id: int, number: str = "1") -> CvIssue:
     """Fully-hydrated CvIssue — raw_payload carries an ``image``
     dict with the small/medium variants the duplicates inspector
     asks for. Use this whenever a test wants the group to actually
@@ -505,10 +526,7 @@ async def test_list_issue_duplicates_mixed_hydrated_and_deferred(db_session):
     db_session.add(_cv_issue(9080, 908))  # stub — no image data
     # sha256 is VARCHAR(64) — keep every fixture sha at exactly 64
     # chars. Single hex digit as the disambiguating prefix.
-    files = [
-        _hash_file(db_session, sha=prefix * 64)
-        for prefix in ("a", "b", "c", "d")
-    ]
+    files = [_hash_file(db_session, sha=prefix * 64) for prefix in ("a", "b", "c", "d")]
     await db_session.flush()
     db_session.add(_match(files[0].id, 9070))
     db_session.add(_match(files[1].id, 9070))
@@ -625,7 +643,8 @@ async def test_get_issue_duplicate_group_returns_populated_group(
         size_bytes=30 * 1024 * 1024,
         archive_format="cbz",
         page_count=24,
-        cover_width=1200, cover_height=1800,
+        cover_width=1200,
+        cover_height=1800,
         comicinfo_status=ComicInfoStatus.PARTIAL,
         excluded_from_matching=False,
         first_scanned_at=datetime.now(tz=UTC),
@@ -635,7 +654,8 @@ async def test_get_issue_duplicate_group_returns_populated_group(
         size_bytes=80 * 1024 * 1024,
         archive_format="cbr",
         page_count=24,
-        cover_width=2400, cover_height=3600,
+        cover_width=2400,
+        cover_height=3600,
         comicinfo_status=ComicInfoStatus.FULL_WITH_CVID,
         excluded_from_matching=False,
         first_scanned_at=datetime.now(tz=UTC),

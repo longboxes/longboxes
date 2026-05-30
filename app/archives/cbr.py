@@ -38,8 +38,7 @@ class CbrReader:
                 return [
                     info.filename
                     for info in rf.infolist()
-                    if not info.is_dir()
-                    and Path(info.filename).suffix.lower() in PAGE_EXTENSIONS
+                    if not info.is_dir() and Path(info.filename).suffix.lower() in PAGE_EXTENSIONS
                 ]
         except (rarfile.Error, OSError) as e:
             raise ArchiveError(f"corrupt or unreadable CBR: {self.path}") from e

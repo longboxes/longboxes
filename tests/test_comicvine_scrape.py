@@ -59,11 +59,7 @@ def _cover_page(volumes, *, results_count=None):
     """Build a synthetic issues-cover page. ``volumes`` is a list of
     ``(cv_id, name)`` — each rendered as a textless cover link + a name
     link, mirroring ComicVine's real markup."""
-    rc = (
-        f'<li class="results">{results_count} results</li>'
-        if results_count is not None
-        else ""
-    )
+    rc = f'<li class="results">{results_count} results</li>' if results_count is not None else ""
     cards = "".join(
         f'<li class="volume">'
         f'<a href="/v/4050-{vid}/"><img data-src="https://x/{vid}.jpg"></a>'
@@ -74,9 +70,7 @@ def _cover_page(volumes, *, results_count=None):
 
 
 def test_parse_issues_cover_page_full():
-    page = parse_issues_cover_page(
-        _cover_page([(100, "Saga"), (200, "X-Men")], results_count=1424)
-    )
+    page = parse_issues_cover_page(_cover_page([(100, "Saga"), (200, "X-Men")], results_count=1424))
     assert page.results_count == 1424
     assert [(v.cv_id, v.name) for v in page.volumes] == [
         (100, "Saga"),
@@ -88,9 +82,7 @@ def test_parse_issues_cover_page_full():
 
 
 def test_parse_issues_cover_page_count_with_commas():
-    page = parse_issues_cover_page(
-        _cover_page([(1, "A")], results_count="1,424")
-    )
+    page = parse_issues_cover_page(_cover_page([(1, "A")], results_count="1,424"))
     assert page.results_count == 1424
 
 
@@ -178,9 +170,7 @@ async def test_scrape_character_volumes_paginates(db_session):
     rows = (
         (
             await db_session.execute(
-                select(CvCharacterVolume).where(
-                    CvCharacterVolume.character_cv_id == 1486
-                )
+                select(CvCharacterVolume).where(CvCharacterVolume.character_cv_id == 1486)
             )
         )
         .scalars()
@@ -202,9 +192,7 @@ async def test_scrape_character_volumes_replaces_wholesale(db_session):
         site_url="https://comicvine.gamespot.com/venom/4005-1486/",
     )
     db_session.add(
-        CvCharacterVolume(
-            character_cv_id=1486, volume_cv_id=999, name="Stale", position=0
-        )
+        CvCharacterVolume(character_cv_id=1486, volume_cv_id=999, name="Stale", position=0)
     )
     await db_session.commit()
 
@@ -214,9 +202,7 @@ async def test_scrape_character_volumes_replaces_wholesale(db_session):
     rows = (
         (
             await db_session.execute(
-                select(CvCharacterVolume).where(
-                    CvCharacterVolume.character_cv_id == 1486
-                )
+                select(CvCharacterVolume).where(CvCharacterVolume.character_cv_id == 1486)
             )
         )
         .scalars()
@@ -234,9 +220,7 @@ async def test_scrape_character_volumes_no_site_url(db_session):
     )
     db_session.add(character)
     await db_session.commit()
-    result = await scrape_character_volumes(
-        db_session, 77, fetcher=_make_paged_fetcher({})
-    )
+    result = await scrape_character_volumes(db_session, 77, fetcher=_make_paged_fetcher({}))
     assert result["status"] == "skipped"
     assert result["reason"] == "no_site_url"
 
@@ -299,8 +283,7 @@ async def test_scrape_volume_themes(db_session):
             name="Some Volume",
             raw_payload={
                 "id": 2127,
-                "site_detail_url":
-                    "https://comicvine.gamespot.com/v/4050-2127/",
+                "site_detail_url": "https://comicvine.gamespot.com/v/4050-2127/",
             },
             fetched_at=datetime.now(tz=UTC),
         )
@@ -316,7 +299,10 @@ async def test_scrape_volume_themes(db_session):
     volume = await db_session.get(CvVolume, 2127)
     assert {t["id"] for t in volume.themes} == {2, 11, 52, 61}
     assert {t["name"] for t in volume.themes} == {
-        "Action", "Bronze Age (1970 - 1985)", "Complete", "Ongoing",
+        "Action",
+        "Bronze Age (1970 - 1985)",
+        "Complete",
+        "Ongoing",
     }
     # Stamped so the volume page fires the scrape at most once.
     assert volume.themes_scraped_at is not None
@@ -332,8 +318,6 @@ async def test_scrape_volume_themes_no_site_url(db_session):
         )
     )
     await db_session.commit()
-    result = await scrape_volume_themes(
-        db_session, 88, fetcher=_make_fetcher(_VOLUME_THEMES_HTML)
-    )
+    result = await scrape_volume_themes(db_session, 88, fetcher=_make_fetcher(_VOLUME_THEMES_HTML))
     assert result["status"] == "skipped"
     assert result["reason"] == "no_site_url"

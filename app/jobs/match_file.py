@@ -90,12 +90,9 @@ def match_file_job(file_id: str) -> dict:
                 # a key, the next time this job fires it'll pass the
                 # check and run the matcher.
                 if not await is_cv_configured(db):
-                    _reschedule_match(
-                        file_id, NO_KEY_RESCHEDULE_SECONDS
-                    )
+                    _reschedule_match(file_id, NO_KEY_RESCHEDULE_SECONDS)
                     logger.info(
-                        "match_file %s held — no ComicVine API key set; "
-                        "rescheduled in %.0fs",
+                        "match_file %s held — no ComicVine API key set; rescheduled in %.0fs",
                         parsed_id,
                         NO_KEY_RESCHEDULE_SECONDS,
                     )
@@ -270,10 +267,7 @@ async def enqueue_match_all_unmatched_async(db: AsyncSession) -> int:
         select(File.id)
         .outerjoin(FileMatch, FileMatch.file_id == File.id)
         .where(File.excluded_from_matching.is_(False))
-        .where(
-            (FileMatch.file_id.is_(None))
-            | (FileMatch.status.in_(("unmatched", "pending")))
-        )
+        .where((FileMatch.file_id.is_(None)) | (FileMatch.status.in_(("unmatched", "pending"))))
         # ``File.id`` last so the order is deterministic even when two
         # files share a path proxy (rare — same content at the same
         # path) or land in the same tier with NULL paths.

@@ -41,9 +41,7 @@ def test_volume_issues_jumps_to_front_of_queue(monkeypatch):
     revalidate.enqueue_revalidate("issue", 300)
 
     queue = Queue("default", connection=conn)
-    args_in_queue_order = [
-        queue.fetch_job(jid).args for jid in queue.job_ids
-    ]
+    args_in_queue_order = [queue.fetch_job(jid).args for jid in queue.job_ids]
 
     assert args_in_queue_order == [
         ("volume_issues", 200),
@@ -63,9 +61,7 @@ def test_non_volume_issues_stays_at_tail(monkeypatch):
     revalidate.enqueue_revalidate("volume", 3)
 
     queue = Queue("default", connection=conn)
-    args_in_queue_order = [
-        queue.fetch_job(jid).args for jid in queue.job_ids
-    ]
+    args_in_queue_order = [queue.fetch_job(jid).args for jid in queue.job_ids]
     assert args_in_queue_order == [("issue", 1), ("issue", 2), ("volume", 3)]
 
 
@@ -96,7 +92,10 @@ def test_at_front_promotes_existing_queued_job_to_front(monkeypatch):
     queue = Queue("default", connection=conn)
     args_before = [queue.fetch_job(j).args for j in queue.job_ids]
     assert args_before == [
-        ("issue", 1), ("issue", 2), ("issue", 3), ("issue", 99),
+        ("issue", 1),
+        ("issue", 2),
+        ("issue", 3),
+        ("issue", 99),
     ]
 
     # Interactive caller asks for at_front. The existing QUEUED job
@@ -105,12 +104,13 @@ def test_at_front_promotes_existing_queued_job_to_front(monkeypatch):
 
     args_after = [queue.fetch_job(j).args for j in queue.job_ids]
     assert args_after == [
-        ("issue", 99), ("issue", 1), ("issue", 2), ("issue", 3),
+        ("issue", 99),
+        ("issue", 1),
+        ("issue", 2),
+        ("issue", 3),
     ]
     # No duplicate — the deterministic-id contract is intact.
-    assert (
-        sum(1 for a in args_after if a == ("issue", 99)) == 1
-    )
+    assert sum(1 for a in args_after if a == ("issue", 99)) == 1
 
 
 def test_at_front_does_not_preempt_running_job(monkeypatch):
@@ -122,9 +122,7 @@ def test_at_front_does_not_preempt_running_job(monkeypatch):
     _patch_redis(monkeypatch, conn)
 
     revalidate.enqueue_revalidate("issue", 50)
-    job = Job.fetch(
-        revalidate.revalidate_job_id("issue", 50), connection=conn
-    )
+    job = Job.fetch(revalidate.revalidate_job_id("issue", 50), connection=conn)
     job.set_status(JobStatus.STARTED)
     # Remove from the queue list — STARTED jobs sit in the
     # started-job registry, not the dispatchable queue.
@@ -134,9 +132,7 @@ def test_at_front_does_not_preempt_running_job(monkeypatch):
     revalidate.enqueue_revalidate("issue", 50, at_front=True)
 
     # The job is still STARTED; no fresh queued duplicate.
-    refetched = Job.fetch(
-        revalidate.revalidate_job_id("issue", 50), connection=conn
-    )
+    refetched = Job.fetch(revalidate.revalidate_job_id("issue", 50), connection=conn)
     assert refetched.get_status() == JobStatus.STARTED
     assert revalidate.revalidate_job_id("issue", 50) not in queue.job_ids
 
@@ -162,9 +158,7 @@ def test_at_front_opt_in_promotes_interactive_revalidates(monkeypatch):
     revalidate.enqueue_revalidate("issue", 99, at_front=True)
 
     queue = Queue("default", connection=conn)
-    args_in_queue_order = [
-        queue.fetch_job(jid).args for jid in queue.job_ids
-    ]
+    args_in_queue_order = [queue.fetch_job(jid).args for jid in queue.job_ids]
     # 99 jumps to the front, ahead of the backlog.
     assert args_in_queue_order == [
         ("issue", 99),
@@ -317,7 +311,9 @@ def test_rescheduled_retry_after_reports_seconds_remaining(monkeypatch):
     # added on the way in to give the retry time to actually fire).
     # 300s TTL → user-meaningful 240s remaining.
     conn.setex(
-        revalidate._rescheduled_marker_key("issue", 9999), 300, b"1",
+        revalidate._rescheduled_marker_key("issue", 9999),
+        300,
+        b"1",
     )
     remaining = revalidate.rescheduled_retry_after("issue", 9999)
     assert remaining is not None

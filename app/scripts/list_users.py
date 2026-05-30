@@ -24,10 +24,10 @@ from app.models import User
 async def _main() -> int:
     async with SessionLocal() as session:
         rows = (
-            await session.execute(
-                select(User).order_by(User.role.desc(), User.username)
-            )
-        ).scalars().all()
+            (await session.execute(select(User).order_by(User.role.desc(), User.username)))
+            .scalars()
+            .all()
+        )
 
     if not rows:
         print("(no users)")

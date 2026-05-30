@@ -40,7 +40,7 @@ ARCHIVE_BACKEND = "archive_backend"
 
 DEFAULT_SCAN_INTERVAL_SECONDS = 3600  # 1 hour, per design §9 scanner
 DEFAULT_PAGE_SIZE = 15  # initial pagination window — library, publisher arcs,
-                       # volume issues, arc issues all use the same value
+# volume issues, arc issues all use the same value
 # Clamp the admin form's input to a sane range. Too-small windows turn into
 # excessive pagination clicks; too-large windows blast the CV rate limiter
 # on first-load hydration.
@@ -189,10 +189,7 @@ async def set_archive_backend(db: AsyncSession, backend: str) -> None:
     from a hardcoded list, but the guard keeps the DB clean if
     someone POSTs directly."""
     if backend not in ARCHIVE_BACKENDS:
-        raise ValueError(
-            f"unknown archive backend {backend!r}; "
-            f"expected one of {ARCHIVE_BACKENDS}"
-        )
+        raise ValueError(f"unknown archive backend {backend!r}; expected one of {ARCHIVE_BACKENDS}")
     await set_setting(db, ARCHIVE_BACKEND, backend)
 
 

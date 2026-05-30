@@ -84,7 +84,7 @@ class HealthReport:
     total_files: int = 0
     total_locations: int = 0
     duplicate_files_count: int = 0  # files with >1 current location
-    duplicate_bytes: int = 0        # sum((N-1) * size_bytes) over those files
+    duplicate_bytes: int = 0  # sum((N-1) * size_bytes) over those files
     excluded_count: int = 0
 
     # ComicInfo coverage
@@ -113,20 +113,14 @@ async def compute_health(db: AsyncSession) -> HealthReport:
 
     # ---- Basic counts -------------------------------------------------
 
-    report.total_files = await _scalar(
-        db, select(func.count()).select_from(File)
-    )
+    report.total_files = await _scalar(db, select(func.count()).select_from(File))
     report.total_locations = await _scalar(
         db,
-        select(func.count()).select_from(FileLocation).where(
-            FileLocation.missing_since.is_(None)
-        ),
+        select(func.count()).select_from(FileLocation).where(FileLocation.missing_since.is_(None)),
     )
     report.excluded_count = await _scalar(
         db,
-        select(func.count()).select_from(File).where(
-            File.excluded_from_matching.is_(True)
-        ),
+        select(func.count()).select_from(File).where(File.excluded_from_matching.is_(True)),
     )
 
     # ---- Duplicate footprint -----------------------------------------
@@ -149,10 +143,7 @@ async def compute_health(db: AsyncSession) -> HealthReport:
             report.duplicate_bytes += (loc_count - 1) * size_bytes
 
     # ---- ComicInfo coverage breakdown --------------------------------
-    ci_stmt = (
-        select(File.comicinfo_status, func.count())
-        .group_by(File.comicinfo_status)
-    )
+    ci_stmt = select(File.comicinfo_status, func.count()).group_by(File.comicinfo_status)
     for status_value, count in (await db.execute(ci_stmt)).all():
         if status_value == ComicInfoStatus.FULL_WITH_CVID:
             report.comicinfo.full_with_cvid = count
@@ -162,9 +153,7 @@ async def compute_health(db: AsyncSession) -> HealthReport:
             report.comicinfo.none = count
 
     # ---- Match status breakdown --------------------------------------
-    match_stmt = (
-        select(FileMatch.status, func.count()).group_by(FileMatch.status)
-    )
+    match_stmt = select(FileMatch.status, func.count()).group_by(FileMatch.status)
     for status_value, count in (await db.execute(match_stmt)).all():
         if status_value == MatchStatus.AUTO:
             report.matches.auto = count
@@ -198,25 +187,20 @@ async def compute_health(db: AsyncSession) -> HealthReport:
     if report.total_files > 0:
         # Projected: weighted average of per-bucket projections.
         projected_count = (
-            report.comicinfo.full_with_cvid
-            * PROJECTION[ComicInfoStatus.FULL_WITH_CVID]
+            report.comicinfo.full_with_cvid * PROJECTION[ComicInfoStatus.FULL_WITH_CVID]
             + report.comicinfo.partial * PROJECTION[ComicInfoStatus.PARTIAL]
             + report.comicinfo.none * PROJECTION[ComicInfoStatus.NONE]
         )
         report.projected_auto_rate = projected_count / report.total_files
 
         low = (
-            report.comicinfo.full_with_cvid
-            * PROJECTION_RANGE[ComicInfoStatus.FULL_WITH_CVID][0]
-            + report.comicinfo.partial
-            * PROJECTION_RANGE[ComicInfoStatus.PARTIAL][0]
+            report.comicinfo.full_with_cvid * PROJECTION_RANGE[ComicInfoStatus.FULL_WITH_CVID][0]
+            + report.comicinfo.partial * PROJECTION_RANGE[ComicInfoStatus.PARTIAL][0]
             + report.comicinfo.none * PROJECTION_RANGE[ComicInfoStatus.NONE][0]
         )
         high = (
-            report.comicinfo.full_with_cvid
-            * PROJECTION_RANGE[ComicInfoStatus.FULL_WITH_CVID][1]
-            + report.comicinfo.partial
-            * PROJECTION_RANGE[ComicInfoStatus.PARTIAL][1]
+            report.comicinfo.full_with_cvid * PROJECTION_RANGE[ComicInfoStatus.FULL_WITH_CVID][1]
+            + report.comicinfo.partial * PROJECTION_RANGE[ComicInfoStatus.PARTIAL][1]
             + report.comicinfo.none * PROJECTION_RANGE[ComicInfoStatus.NONE][1]
         )
         report.projected_auto_rate_low = low / report.total_files

@@ -66,9 +66,7 @@ _PAGE_CONTENT_TYPES = {
 }
 
 
-async def _current_location(
-    db: DbSessionDep, file_id: uuid.UUID
-) -> FileLocation | None:
+async def _current_location(db: DbSessionDep, file_id: uuid.UUID) -> FileLocation | None:
     """The file's current (non-missing) on-disk location, newest first.
 
     A file can have several locations (the same content at multiple
@@ -97,14 +95,10 @@ def _read_page(path: str, backend: str, index: int) -> tuple[bytes, str]:
     reader = open_archive(Path(path), backend=backend)
     pages = reader.list_pages()
     if index < 0 or index >= len(pages):
-        raise ArchiveError(
-            f"page {index} out of range (archive has {len(pages)})"
-        )
+        raise ArchiveError(f"page {index} out of range (archive has {len(pages)})")
     name = pages[index]
     data = reader.extract_page(name)
-    content_type = _PAGE_CONTENT_TYPES.get(
-        Path(name).suffix.lower(), "image/jpeg"
-    )
+    content_type = _PAGE_CONTENT_TYPES.get(Path(name).suffix.lower(), "image/jpeg")
     return data, content_type
 
 
@@ -149,13 +143,9 @@ async def read_file(
     if not page_count:
         backend = await get_archive_backend(db)
         try:
-            page_count = await asyncio.to_thread(
-                _page_count, location.path, backend
-            )
+            page_count = await asyncio.to_thread(_page_count, location.path, backend)
         except (ArchiveError, UnsupportedArchiveError, OSError) as e:
-            logger.warning(
-                "read_file: page count failed for %s: %s", location.path, e
-            )
+            logger.warning("read_file: page count failed for %s: %s", location.path, e)
             page_count = 0
 
     # Reading direction is a per-volume setting (manga reads RTL); the
@@ -220,13 +210,9 @@ async def read_page(
     try:
         # Sync archive work goes through ``to_thread`` so the event loop
         # stays free while ``unar`` / pymupdf does its thing.
-        data, content_type = await asyncio.to_thread(
-            _read_page, location.path, backend, index
-        )
+        data, content_type = await asyncio.to_thread(_read_page, location.path, backend, index)
     except (ArchiveError, UnsupportedArchiveError, OSError) as e:
-        logger.warning(
-            "read_page failed for %s page %d: %s", location.path, index, e
-        )
+        logger.warning("read_page failed for %s page %d: %s", location.path, index, e)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Couldn't read page {index}.",
@@ -290,9 +276,7 @@ async def save_read_progress_route(
     if not user.track_reading_progress:
         return {"ok": True, "tracked": False}
     if await db.get(File, file_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="No such file."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such file.")
     # Unmatched files have no issue / local-issue / volume page where
     # the user could reach a reset-progress button. Tracking progress
     # there would strand them with a stale "Continue reading" entry

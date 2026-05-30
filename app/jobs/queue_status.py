@@ -36,10 +36,10 @@ _QUEUE_NAME = "default"
 class QueueStats:
     """RQ ``default``-queue counts at the moment ``get_queue_stats`` ran."""
 
-    queued: int = 0      # ready to run now — the bulk of a match backlog
-    scheduled: int = 0   # waiting out a delay: rate-limit re-enqueues
-    started: int = 0     # executing right now (<= 1 with a single worker)
-    failed: int = 0      # raised and exhausted their retries
+    queued: int = 0  # ready to run now — the bulk of a match backlog
+    scheduled: int = 0  # waiting out a delay: rate-limit re-enqueues
+    started: int = 0  # executing right now (<= 1 with a single worker)
+    failed: int = 0  # raised and exhausted their retries
 
     @property
     def outstanding(self) -> int:
@@ -158,9 +158,7 @@ def get_job_position(
                 # range read. Report it as in flight without a position
                 # rather than misclassifying.
                 return JobPosition(state="queued", position=None, depth=len(job_ids))
-            return JobPosition(
-                state="queued", position=idx + 1, depth=len(job_ids)
-            )
+            return JobPosition(state="queued", position=idx + 1, depth=len(job_ids))
 
         if status == JobStatus.SCHEDULED:
             # Scheduled jobs sit in a sorted set keyed on their fire-at
@@ -293,9 +291,7 @@ async def list_failed_jobs(
             continue
         function_name = (job.func_name or "").rsplit(".", 1)[-1]
         exc_class, exc_message = _parse_exc_info(job.exc_info)
-        failed_at = (
-            job.ended_at.isoformat() if job.ended_at is not None else None
-        )
+        failed_at = job.ended_at.isoformat() if job.ended_at is not None else None
         file_id: str | None = None
         args_summary = repr(job.args)
         if function_name == "match_file_job" and job.args:
@@ -310,6 +306,7 @@ async def list_failed_jobs(
     paths: dict[str, str] = {}
     if file_ids_to_resolve:
         import uuid as _uuid
+
         # ``file_id`` arrives as str-of-UUID; cast back for the query.
         try:
             ids = [_uuid.UUID(fid) for fid in file_ids_to_resolve]
@@ -424,9 +421,7 @@ def clear_all_failed_jobs(connection: Redis | None = None) -> int:
     return deleted
 
 
-def _job_ids_for_exc_class(
-    exc_class: str, connection: Redis
-) -> list[str]:
+def _job_ids_for_exc_class(exc_class: str, connection: Redis) -> list[str]:
     """Return every failed-job id whose parsed exception class matches.
 
     Walks the failed registry directly (no DB hit) — we only need the
@@ -450,9 +445,7 @@ def _job_ids_for_exc_class(
     return matching
 
 
-def requeue_failed_jobs_by_class(
-    exc_class: str, connection: Redis | None = None
-) -> int:
+def requeue_failed_jobs_by_class(exc_class: str, connection: Redis | None = None) -> int:
     """Requeue every failed job whose parsed exception class equals
     ``exc_class``. Returns the count requeued.
 
@@ -474,9 +467,7 @@ def requeue_failed_jobs_by_class(
     return requeued
 
 
-def clear_failed_jobs_by_class(
-    exc_class: str, connection: Redis | None = None
-) -> int:
+def clear_failed_jobs_by_class(exc_class: str, connection: Redis | None = None) -> int:
     """Drop every failed job whose parsed exception class equals
     ``exc_class``. Returns the count deleted.
 

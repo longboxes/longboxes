@@ -59,9 +59,7 @@ def revalidate_cv_entity_job(entity_type: str, cv_id: int) -> dict:
     """RQ entrypoint. ``entity_type`` is one of the keys in ``_REFRESH_METHODS``."""
     method_name = _REFRESH_METHODS.get(entity_type)
     if method_name is None:
-        logger.warning(
-            "revalidate_cv_entity got unknown entity_type=%r; skipping", entity_type
-        )
+        logger.warning("revalidate_cv_entity got unknown entity_type=%r; skipping", entity_type)
         return {"status": "skipped", "reason": "unknown_entity"}
 
     async def _run() -> dict:
@@ -91,9 +89,7 @@ def revalidate_cv_entity_job(entity_type: str, cv_id: int) -> dict:
                     # Revalidation is best-effort SWR: the cached row
                     # stays stale and the next read re-triggers a
                     # refresh, so there's nothing to reschedule here.
-                    logger.warning(
-                        "revalidate failed for %s/%s: %s", entity_type, cv_id, e
-                    )
+                    logger.warning("revalidate failed for %s/%s: %s", entity_type, cv_id, e)
                     return {"status": "error", "error": str(e)}
             return {"status": "ok", "entity_type": entity_type, "cv_id": cv_id}
         finally:
@@ -118,7 +114,10 @@ def revalidate_cv_entity_job(entity_type: str, cv_id: int) -> dict:
         _reschedule_revalidate(entity_type, cv_id, delay, queue=origin)
         logger.warning(
             "revalidate: CV rate-limited; %s/%s re-scheduled in %.0fs on %r",
-            entity_type, cv_id, delay, origin,
+            entity_type,
+            cv_id,
+            delay,
+            origin,
         )
         return {
             "status": "rescheduled",
@@ -238,12 +237,14 @@ def revalidate_job_id(entity_type: str, cv_id: int) -> str:
 # the same id while in any of these states should no-op rather than
 # overwrite. JobStatus.DEFERRED covers explicit ``depends_on`` chains
 # (we don't use them today but the contract is the same).
-_IN_FLIGHT_STATUSES = frozenset({
-    JobStatus.QUEUED,
-    JobStatus.STARTED,
-    JobStatus.SCHEDULED,
-    JobStatus.DEFERRED,
-})
+_IN_FLIGHT_STATUSES = frozenset(
+    {
+        JobStatus.QUEUED,
+        JobStatus.STARTED,
+        JobStatus.SCHEDULED,
+        JobStatus.DEFERRED,
+    }
+)
 
 
 def enqueue_revalidate(
@@ -308,7 +309,9 @@ def enqueue_revalidate(
     except (TypeError, ValueError) as e:
         logger.warning(
             "enqueue_revalidate(%r, %r): bad cv_id, skipping: %s",
-            entity_type, cv_id, e,
+            entity_type,
+            cv_id,
+            e,
         )
         return
 
@@ -370,14 +373,15 @@ def enqueue_revalidate(
         # job. A missed background revalidate is harmless; a crashed
         # match job is real lost work.
         logger.warning(
-            "enqueue_revalidate(%r, %r): queue.enqueue rejected the "
-            "job id %r: %s", entity_type, cv_id, job_id, e,
+            "enqueue_revalidate(%r, %r): queue.enqueue rejected the job id %r: %s",
+            entity_type,
+            cv_id,
+            job_id,
+            e,
         )
 
 
-def enqueue_revalidate_interactive(
-    entity_type: str, cv_id: int, *, at_front: bool = False
-) -> None:
+def enqueue_revalidate_interactive(entity_type: str, cv_id: int, *, at_front: bool = False) -> None:
     """``enqueue_revalidate`` bound to the ``interactive`` queue.
 
     The browse-page surface (library, volume, character, team, arc,
@@ -396,6 +400,4 @@ def enqueue_revalidate_interactive(
     parameter — the import-rename trick at browse-route call sites
     needs the rest of the kwargs to line up so an existing
     ``at_front=True`` call doesn't have to change."""
-    enqueue_revalidate(
-        entity_type, cv_id, at_front=at_front, queue="interactive"
-    )
+    enqueue_revalidate(entity_type, cv_id, at_front=at_front, queue="interactive")

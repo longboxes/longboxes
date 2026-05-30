@@ -78,6 +78,8 @@ def reschedule_delay(retry_after: float | None) -> float:
     base = retry_after if retry_after and retry_after > 0 else DEFAULT_PENALTY_SECONDS
     base = max(base, 30.0)
     return base + random.uniform(0, min(base * 0.25, 120.0))
+
+
 # Gate keys expire after this much idle time. A missing key just means
 # "no throttle yet", which is the correct fresh state — so letting an idle
 # gate lapse is harmless housekeeping.
@@ -154,9 +156,7 @@ class RedisRatePacer:
             allow_at = tat - self._burst_tolerance
             if now >= allow_at:
                 # Conformant — consume a slot by advancing the gate.
-                await redis.set(
-                    key, repr(tat + self._interval), ex=_KEY_TTL_SECONDS
-                )
+                await redis.set(key, repr(tat + self._interval), ex=_KEY_TTL_SECONDS)
                 return
             wait = allow_at - now
             if wait > self._max_inline_wait:
@@ -187,6 +187,4 @@ class RedisRatePacer:
         target = now + seconds + self._burst_tolerance
         new_tat = max(tat, target)
         await redis.set(key, repr(new_tat), ex=_KEY_TTL_SECONDS)
-        logger.warning(
-            "ComicVine %s gate penalised: backing off ~%.0fs", resource, seconds
-        )
+        logger.warning("ComicVine %s gate penalised: backing off ~%.0fs", resource, seconds)

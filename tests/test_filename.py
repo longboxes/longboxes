@@ -121,9 +121,7 @@ def test_path_year_extracts_parent_folder_year():
     surfaces the most popular volume of a series for every modern
     issue (the Wonder Woman 1987 vol 2 case). With it, files in
     year-tagged folders get a usable year signal."""
-    parsed = parse_filename(
-        "/library/Wonder Woman (2011)/Wonder Woman 023.cbz"
-    )
+    parsed = parse_filename("/library/Wonder Woman (2011)/Wonder Woman 023.cbz")
     # Filename itself has no year — the basename parser returns None.
     assert parsed.year is None
     # Folder tag picked up.
@@ -132,9 +130,7 @@ def test_path_year_extracts_parent_folder_year():
 
 def test_path_year_with_square_brackets():
     """Some layouts use ``[YYYY]`` instead of ``(YYYY)``."""
-    parsed = parse_filename(
-        "/library/Saga [2012]/Saga 001.cbz"
-    )
+    parsed = parse_filename("/library/Saga [2012]/Saga 001.cbz")
     assert parsed.year is None
     assert parsed.path_year == 2012
 
@@ -144,9 +140,7 @@ def test_path_year_does_not_run_when_filename_has_year():
     skipped — the filename's own year is more specific (it's about
     *this* issue) than a folder tag (which describes the volume).
     Skipping keeps the parser cheap for the common case."""
-    parsed = parse_filename(
-        "/library/Wonder Woman (2011)/Wonder Woman 023 (2013).cbz"
-    )
+    parsed = parse_filename("/library/Wonder Woman (2011)/Wonder Woman 023 (2013).cbz")
     assert parsed.year == 2013
     # path_year MAY be left None when the filename year wins — the
     # docstring says it's only populated as a fallback.
@@ -158,9 +152,7 @@ def test_path_year_picks_closest_year_tagged_ancestor():
     return a stray year from a higher ancestor. The closest
     year-tagged folder to the file wins, and the walk stops at the
     first hit."""
-    parsed = parse_filename(
-        "/library (2020)/Wonder Woman (2011)/Wonder Woman 023.cbz"
-    )
+    parsed = parse_filename("/library (2020)/Wonder Woman (2011)/Wonder Woman 023.cbz")
     # The (2011) folder is the file's direct parent — that's the one
     # we want, not the (2020) ancestor that's just where the library
     # happened to be planted.
@@ -174,9 +166,7 @@ def test_path_year_ignores_implausible_year_values():
     ``_PATH_YEAR_FLOOR`` guard catches the corner case of a
     bracketed 4-digit number that's clearly not a year (``(0001)``,
     ``(0042)`` etc.)."""
-    parsed = parse_filename(
-        "/library/Some Series (0042)/Some Series 001.cbz"
-    )
+    parsed = parse_filename("/library/Some Series (0042)/Some Series 001.cbz")
     # 42 is well below the 1930 floor; should be ignored.
     assert parsed.path_year is None
 
@@ -185,9 +175,7 @@ def test_path_year_none_when_no_folder_year_present():
     """A plain layout with no year tags anywhere produces ``None``
     on path_year — matching the v1 behaviour for callers that pass
     a bare filename string (no parents to walk)."""
-    parsed = parse_filename(
-        "/library/Some Series/Some Series 001.cbz"
-    )
+    parsed = parse_filename("/library/Some Series/Some Series 001.cbz")
     assert parsed.path_year is None
 
 

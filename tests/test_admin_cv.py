@@ -38,9 +38,7 @@ async def _make_admin_and_login(client, db_session):
         )
     )
     await db_session.commit()
-    r = await client.post(
-        "/login", data={"username": "admin", "password": "adminpass1"}
-    )
+    r = await client.post("/login", data={"username": "admin", "password": "adminpass1"})
     assert r.status_code == 303
 
 
@@ -61,7 +59,8 @@ async def test_save_cv_key(client, db_session, monkeypatch):
         return True, None
 
     monkeypatch.setattr(
-        "app.comicvine.client.validate_cv_api_key", fake_validate,
+        "app.comicvine.client.validate_cv_api_key",
+        fake_validate,
     )
 
     await _make_admin_and_login(client, db_session)
@@ -167,9 +166,7 @@ async def test_add_volume_requires_admin(client, db_session):
         )
     )
     await db_session.commit()
-    r = await client.post(
-        "/login", data={"username": "bob", "password": "viewerpass1"}
-    )
+    r = await client.post("/login", data={"username": "bob", "password": "viewerpass1"})
     assert r.status_code == 303
     r = await client.post("/admin/volume", data={"cv_id": "1"})
     assert r.status_code == 403

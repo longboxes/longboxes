@@ -334,7 +334,10 @@ class ComicVineCache:
         seen_volume_ids: set[int] = set()
         while True:
             envelope = await self._client.list_issues_by_volume(
-                db, volume_cv_id, offset=offset, limit=page_size,
+                db,
+                volume_cv_id,
+                offset=offset,
+                limit=page_size,
             )
             results = envelope.get("results") or []
             if not isinstance(results, list):
@@ -358,10 +361,7 @@ class ComicVineCache:
                 existing = await db.get(CvIssue, cv_id)
                 if existing is not None and existing.fetched_at is not None:
                     raw = existing.raw_payload or {}
-                    is_bulk = (
-                        isinstance(raw, dict)
-                        and raw.get("_bulk_hydrated") is True
-                    )
+                    is_bulk = isinstance(raw, dict) and raw.get("_bulk_hydrated") is True
                     if not is_bulk:
                         continue
 
@@ -406,9 +406,7 @@ class ComicVineCache:
                         set_={
                             "volume_cv_id": this_vol_id,
                             "issue_number": issue_payload.get("issue_number"),
-                            "cover_date": _safe_date(
-                                issue_payload.get("cover_date")
-                            ),
+                            "cover_date": _safe_date(issue_payload.get("cover_date")),
                             "name": issue_payload.get("name"),
                             "raw_payload": tagged_payload,
                             "fetched_at": now,
@@ -477,9 +475,7 @@ class ComicVineCache:
         if existing is not None and not force_refresh:
             if _is_fresh(existing.fetched_at, ttl):
                 return existing.response_json
-        envelope = await self._client.search(
-            db, query, resources=resources, limit=limit
-        )
+        envelope = await self._client.search(db, query, resources=resources, limit=limit)
         await self._upsert_search(db, request_key, envelope)
         return envelope
 
@@ -489,9 +485,7 @@ class ComicVineCache:
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         publisher_payload = payload.get("publisher") or {}
-        publisher_cv_id = (
-            int(publisher_payload["id"]) if publisher_payload.get("id") else None
-        )
+        publisher_cv_id = int(publisher_payload["id"]) if publisher_payload.get("id") else None
 
         # We used to fire a ``volume_issues`` bulk-hydration job here
         # on first-touch, but that turned every losing Stage 3
@@ -563,9 +557,7 @@ class ComicVineCache:
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         volume_payload = payload.get("volume") or {}
-        volume_cv_id = (
-            int(volume_payload["id"]) if volume_payload.get("id") else None
-        )
+        volume_cv_id = int(volume_payload["id"]) if volume_payload.get("id") else None
 
         # Stub the volume row if it's referenced but we don't have it yet —
         # symmetric to the publisher stub in ``_upsert_volume``. A later
@@ -607,9 +599,7 @@ class ComicVineCache:
         assert result is not None
         return result
 
-    async def _upsert_issue_stub(
-        self, db: AsyncSession, stub: dict, *, volume_cv_id: int
-    ) -> None:
+    async def _upsert_issue_stub(self, db: AsyncSession, stub: dict, *, volume_cv_id: int) -> None:
         """Insert (don't update) a stub row from a volume fetch.
 
         We deliberately don't overwrite an existing row — if a previous
@@ -640,9 +630,7 @@ class ComicVineCache:
         )
         await db.execute(stmt)
 
-    async def _upsert_publisher(
-        self, db: AsyncSession, payload: dict
-    ) -> CvPublisher:
+    async def _upsert_publisher(self, db: AsyncSession, payload: dict) -> CvPublisher:
         """Replace any existing (often stub) publisher row with full data.
 
         Stub rows from ``_upsert_publisher_stub`` carry only id/name plus
@@ -674,9 +662,7 @@ class ComicVineCache:
         assert result is not None
         return result
 
-    async def _upsert_story_arc(
-        self, db: AsyncSession, payload: dict
-    ) -> CvStoryArc:
+    async def _upsert_story_arc(self, db: AsyncSession, payload: dict) -> CvStoryArc:
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (
@@ -702,9 +688,7 @@ class ComicVineCache:
         assert result is not None
         return result
 
-    async def _upsert_character(
-        self, db: AsyncSession, payload: dict
-    ) -> CvCharacter:
+    async def _upsert_character(self, db: AsyncSession, payload: dict) -> CvCharacter:
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (
@@ -730,9 +714,7 @@ class ComicVineCache:
         assert result is not None
         return result
 
-    async def _upsert_person(
-        self, db: AsyncSession, payload: dict
-    ) -> CvPerson:
+    async def _upsert_person(self, db: AsyncSession, payload: dict) -> CvPerson:
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (
@@ -784,9 +766,7 @@ class ComicVineCache:
         assert result is not None
         return result
 
-    async def _upsert_publisher_stub(
-        self, db: AsyncSession, cv_id: int, name: str
-    ) -> None:
+    async def _upsert_publisher_stub(self, db: AsyncSession, cv_id: int, name: str) -> None:
         """Thin publisher row to keep the FK valid on volume upsert.
 
         Only writes if there's no row yet — a real ``/publisher/X/`` call
@@ -805,9 +785,7 @@ class ComicVineCache:
         )
         await db.execute(stmt)
 
-    async def _upsert_volume_stub(
-        self, db: AsyncSession, cv_id: int, name: str
-    ) -> None:
+    async def _upsert_volume_stub(self, db: AsyncSession, cv_id: int, name: str) -> None:
         """Thin volume row to keep the FK valid on issue upsert.
 
         Same pattern as ``_upsert_publisher_stub``. A later ``/volume/X/``
@@ -830,9 +808,7 @@ class ComicVineCache:
         )
         await db.execute(stmt)
 
-    async def _upsert_search(
-        self, db: AsyncSession, request_key: str, envelope: dict
-    ) -> None:
+    async def _upsert_search(self, db: AsyncSession, request_key: str, envelope: dict) -> None:
         now = datetime.now(tz=UTC)
         stmt = (
             pg_insert(CvSearchCache)
@@ -884,11 +860,7 @@ def _has_image_payload(row) -> bool:
     # CV's ``image`` block has size-keyed URLs (``small_url``,
     # ``medium_url``, ``thumb_url``, ...). Any one of them being a
     # populated string is enough to render the card.
-    return any(
-        isinstance(v, str) and v
-        for k, v in img.items()
-        if k.endswith("_url")
-    )
+    return any(isinstance(v, str) and v for k, v in img.items() if k.endswith("_url"))
 
 
 def _request_key(endpoint: str, params: dict[str, str]) -> str:

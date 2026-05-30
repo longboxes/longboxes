@@ -64,9 +64,7 @@ async def _login_viewer(client, db_session):
         )
     )
     await db_session.commit()
-    r = await client.post(
-        "/login", data={"username": "alice", "password": "viewerpass1"}
-    )
+    r = await client.post("/login", data={"username": "alice", "password": "viewerpass1"})
     assert r.status_code == 303
 
 
@@ -138,9 +136,7 @@ async def test_search_page_kind_filter_renders_one_section(client, db_session):
     )
     await db_session.commit()
 
-    r = await client.get(
-        "/search", params={"q": "wol", "kind": "characters"}
-    )
+    r = await client.get("/search", params={"q": "wol", "kind": "characters"})
     assert r.status_code == 200
     # Heading reflects the filter.
     assert "Characters matching" in r.text
@@ -227,9 +223,7 @@ async def test_search_live_short_query_returns_empty(client, db_session):
     }
 
 
-async def test_search_page_enqueues_hydration_for_stubs(
-    client, db_session, enqueue_calls
-):
+async def test_search_page_enqueues_hydration_for_stubs(client, db_session, enqueue_calls):
     """Stub rows (CvVolume with ``_stub`` marker; credit-walk char /
     creator / team / arc with no cv_* row) should each fire one
     ``enqueue_revalidate`` so the interactive worker hydrates them
@@ -371,9 +365,7 @@ async def test_search_hydration_returns_swap_when_hydrated(client, db_session):
     )
     await db_session.commit()
 
-    r = await client.get(
-        "/search/hydration", params={"ids": "character:12321"}
-    )
+    r = await client.get("/search/hydration", params={"ids": "character:12321"})
     assert r.status_code == 200
     data = r.json()
     assert data["completed_ids"] == ["character:12321"]
@@ -394,9 +386,7 @@ async def test_search_hydration_ignores_unknown_kinds(client, db_session):
     """Unknown kinds (typo / future-kind / URL tampering) are silently
     dropped — the poll should never 400."""
     await _login_viewer(client, db_session)
-    r = await client.get(
-        "/search/hydration", params={"ids": "frobnitz:1,character:99999,team:abc"}
-    )
+    r = await client.get("/search/hydration", params={"ids": "frobnitz:1,character:99999,team:abc"})
     assert r.status_code == 200
     assert r.json() == {"swaps": [], "completed_ids": []}
 
@@ -411,9 +401,7 @@ async def test_library_search_page_shows_comicvine_button(client, db_session):
     assert "/search/comicvine?q=anything" in r.text
 
 
-async def test_search_comicvine_renders_with_mocked_envelope(
-    client, db_session, monkeypatch
-):
+async def test_search_comicvine_renders_with_mocked_envelope(client, db_session, monkeypatch):
     """Patch ComicVineCache.search so we don't actually call CV.
     The route should render the search.html template in CV mode with
     flat sections and a back-to-library link."""
@@ -439,9 +427,7 @@ async def test_search_comicvine_renders_with_mocked_envelope(
             ]
         }
 
-    monkeypatch.setattr(
-        "app.comicvine.ComicVineCache.search", fake_search
-    )
+    monkeypatch.setattr("app.comicvine.ComicVineCache.search", fake_search)
 
     r = await client.get("/search/comicvine", params={"q": "saga"})
     assert r.status_code == 200
@@ -457,9 +443,7 @@ async def test_search_comicvine_renders_with_mocked_envelope(
     assert "Other volumes" not in r.text
 
 
-async def test_search_comicvine_kind_filter_renders_one_section(
-    client, db_session, monkeypatch
-):
+async def test_search_comicvine_kind_filter_renders_one_section(client, db_session, monkeypatch):
     """``/search/comicvine?q=X&kind=characters`` should call CV with
     ``resources=character`` and render just that single section, with
     the drill-down back link present."""
@@ -484,9 +468,7 @@ async def test_search_comicvine_kind_filter_renders_one_section(
 
     monkeypatch.setattr("app.comicvine.ComicVineCache.search", fake_search)
 
-    r = await client.get(
-        "/search/comicvine", params={"q": "wol", "kind": "characters"}
-    )
+    r = await client.get("/search/comicvine", params={"q": "wol", "kind": "characters"})
     assert r.status_code == 200
     # CV call narrowed to just character.
     assert captured["resources"] == "character"
@@ -498,9 +480,7 @@ async def test_search_comicvine_kind_filter_renders_one_section(
     assert "Volumes" not in r.text or "Volumes\n" not in r.text  # weak but defensive
 
 
-async def test_search_comicvine_view_all_link_when_overflow(
-    client, db_session, monkeypatch
-):
+async def test_search_comicvine_view_all_link_when_overflow(client, db_session, monkeypatch):
     """When CV returns more than CV_PAGE_LIMIT_PER_KIND for some
     section, the multi-section view emits a "View all <kind> on
     ComicVine" link to /search/comicvine?kind=...."""

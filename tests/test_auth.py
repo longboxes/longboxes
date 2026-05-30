@@ -298,7 +298,8 @@ async def _login_as_admin(client, db_session) -> User:
         role=UserRole.ADMIN,
     )
     r = await client.post(
-        "/login", data={"username": "admin", "password": "hunter2222"},
+        "/login",
+        data={"username": "admin", "password": "hunter2222"},
     )
     assert r.status_code == 303
     return admin
@@ -316,7 +317,9 @@ async def test_setup_cv_form_renders_for_admin(client, db_session):
 
 
 async def test_setup_cv_form_redirects_when_already_configured(
-    client, db_session, monkeypatch,
+    client,
+    db_session,
+    monkeypatch,
 ):
     """If a key is already saved, the wizard step doesn't try to
     re-collect — sends the user to /admin instead."""
@@ -332,7 +335,9 @@ async def test_setup_cv_form_redirects_when_already_configured(
 
 
 async def test_setup_cv_submit_saves_valid_key(
-    client, db_session, monkeypatch,
+    client,
+    db_session,
+    monkeypatch,
 ):
     """A valid key is saved and the user lands on /admin with a
     welcome banner.
@@ -349,12 +354,14 @@ async def test_setup_cv_submit_saves_valid_key(
         return True, None
 
     monkeypatch.setattr(
-        "app.comicvine.client.validate_cv_api_key", fake_validate,
+        "app.comicvine.client.validate_cv_api_key",
+        fake_validate,
     )
 
     await _login_as_admin(client, db_session)
     r = await client.post(
-        "/setup/comicvine", data={"api_key": "abcd1234"},
+        "/setup/comicvine",
+        data={"api_key": "abcd1234"},
     )
     assert r.status_code == 303
     assert r.headers["location"] == "/admin?welcome=1"
@@ -369,7 +376,9 @@ async def test_setup_cv_submit_saves_valid_key(
 
 
 async def test_setup_cv_submit_rerenders_form_on_invalid_key(
-    client, db_session, monkeypatch,
+    client,
+    db_session,
+    monkeypatch,
 ):
     """A key that ComicVine rejects → 400 + the form re-rendered with
     the failed value pre-filled (so the admin can fix a typo without
@@ -379,12 +388,14 @@ async def test_setup_cv_submit_rerenders_form_on_invalid_key(
         return False, "ComicVine rejected the key."
 
     monkeypatch.setattr(
-        "app.comicvine.client.validate_cv_api_key", fake_validate,
+        "app.comicvine.client.validate_cv_api_key",
+        fake_validate,
     )
 
     await _login_as_admin(client, db_session)
     r = await client.post(
-        "/setup/comicvine", data={"api_key": "typo-key"},
+        "/setup/comicvine",
+        data={"api_key": "typo-key"},
     )
     assert r.status_code == 400
     assert "ComicVine rejected" in r.text
@@ -398,7 +409,8 @@ async def test_setup_cv_submit_rerenders_form_on_invalid_key(
 
 
 async def test_setup_cv_skip_redirects_to_admin_with_banner_flag(
-    client, db_session,
+    client,
+    db_session,
 ):
     """Skipping lands on /admin with a flag the template uses to show
     the 'matching disabled — set a key' banner. No CV key is saved."""

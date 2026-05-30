@@ -259,9 +259,7 @@ _COVER_CONTENT_TYPES = {
 
 
 @lru_cache(maxsize=256)
-def _extract_cover_cached(
-    path: str, backend: str
-) -> tuple[bytes, str, CoverInspection | None]:
+def _extract_cover_cached(path: str, backend: str) -> tuple[bytes, str, CoverInspection | None]:
     """Open the archive at ``path`` and return ``(image_bytes,
     content_type, inspection)`` for its cover page.
 
@@ -385,9 +383,7 @@ async def file_cover(
     # in bulk on a re-scan; this catches the case where the operator
     # repairs the archive and opens the review page before the next
     # scan runs.
-    await clear_error_for_path_and_kind(
-        db, location.path, FileErrorKind.COVER_EXTRACTION
-    )
+    await clear_error_for_path_and_kind(db, location.path, FileErrorKind.COVER_EXTRACTION)
 
     # Lazy-backfill cover geometry for files scanned before cover
     # inspection existed — the scanner fills this eagerly for new
@@ -491,7 +487,9 @@ async def volume_confirm_preview(
         enqueue_revalidate("volume_issues", volume)
 
     preview = await preview_volume_confirm(
-        db, series_key=series, volume_cv_id=volume,
+        db,
+        series_key=series,
+        volume_cv_id=volume,
     )
     if preview is None:
         raise HTTPException(
@@ -545,10 +543,7 @@ async def volume_confirm_submit(
             detail=f"Volume {volume} isn't in the cache; can't confirm.",
         )
     return RedirectResponse(
-        url=(
-            f"/review?confirmed={result.confirmed_count}"
-            f"&skipped={result.skipped_count}"
-        ),
+        url=(f"/review?confirmed={result.confirmed_count}&skipped={result.skipped_count}"),
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -578,9 +573,7 @@ async def volume_confirm_covers_hydration(
     # ``queue_status`` is computed even when ``ids`` is empty — the
     # client can poll with no pending IDs once to read state (e.g.
     # to learn the job is in the "scheduled" cooldown branch).
-    queue_status = get_job_position(
-        "volume_issues", volume_cv_id
-    ).to_dict()
+    queue_status = get_job_position("volume_issues", volume_cv_id).to_dict()
 
     issue_ids = parse_id_csv(ids)
     if not issue_ids:
@@ -591,16 +584,18 @@ async def volume_confirm_covers_hydration(
         }
 
     rows = (
-        await db.execute(
-            select(CvIssue)
-            .where(CvIssue.cv_id.in_(issue_ids))
-            .where(CvIssue.volume_cv_id == volume_cv_id)
+        (
+            await db.execute(
+                select(CvIssue)
+                .where(CvIssue.cv_id.in_(issue_ids))
+                .where(CvIssue.volume_cv_id == volume_cv_id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
-    cover_macro = templates.env.get_template(
-        "_matched_cover.html"
-    ).module.matched_cover
+    cover_macro = templates.env.get_template("_matched_cover.html").module.matched_cover
 
     swaps: list[dict] = []
     completed_ids: list[int] = []
@@ -611,10 +606,12 @@ async def volume_confirm_covers_hydration(
             # the image yet — leave it pending, the client keeps
             # asking on its next tick.
             continue
-        swaps.append({
-            "target_id": f"matched-cover-{row.cv_id}",
-            "html": str(cover_macro(row.cv_id, cover_url)),
-        })
+        swaps.append(
+            {
+                "target_id": f"matched-cover-{row.cv_id}",
+                "html": str(cover_macro(row.cv_id, cover_url)),
+            }
+        )
         completed_ids.append(row.cv_id)
 
     # Per-issue fallback for stuck covers. When the bulk ``volume_issues``
@@ -778,9 +775,7 @@ async def volume_search(
         client = ComicVineClient()
         try:
             cache = ComicVineCache(client, enqueue_revalidate=enqueue_revalidate)
-            envelope = await cache.search(
-                db, cleaned, resources="volume", limit=50
-            )
+            envelope = await cache.search(db, cleaned, resources="volume", limit=50)
             results = shape_volume_results(envelope)
         except ComicVineKeyMissingError:
             error = (
@@ -788,10 +783,7 @@ async def volume_search(
                 "Set one in the admin settings before searching."
             )
         except ComicVineKeyInvalidError:
-            error = (
-                "ComicVine rejected the API key. "
-                "Re-paste it in the admin settings."
-            )
+            error = "ComicVine rejected the API key. Re-paste it in the admin settings."
         except ComicVineError as e:
             error = f"ComicVine search failed: {e}"
         finally:
@@ -800,9 +792,7 @@ async def volume_search(
     # Fill in any publisher the CV search payload didn't carry from
     # our local cache (matcher candidates, library volumes).
     if results:
-        pub_map = await publishers_for_volumes(
-            db, {r["cv_id"] for r in results}
-        )
+        pub_map = await publishers_for_volumes(db, {r["cv_id"] for r in results})
         for r in results:
             if not r["publisher"]:
                 r["publisher"] = pub_map.get(r["cv_id"])
@@ -862,9 +852,7 @@ async def local_group_form(
     series_key = series or None
     preview = await preview_local_group(db, series_key)
     if preview is None:
-        return RedirectResponse(
-            url="/review", status_code=status.HTTP_303_SEE_OTHER
-        )
+        return RedirectResponse(url="/review", status_code=status.HTTP_303_SEE_OTHER)
     # Existing local volumes for the find-or-create picker. The template
     # auto-opens in "attaching" mode when one matches the seeded volume
     # name exactly (case-insensitive), so the common "next batch of an
@@ -953,25 +941,19 @@ async def local_group_submit(
         if outcome is None:
             # Target volume was deleted or the group drained — fall back
             # to the queue, same as create_local_group's drained path.
-            return RedirectResponse(
-                url="/review", status_code=status.HTTP_303_SEE_OTHER
-            )
+            return RedirectResponse(url="/review", status_code=status.HTTP_303_SEE_OTHER)
         result, conflicts = outcome
         if conflicts:
             # Soft failure: re-render the form with conflicts surfaced
             # inline so the reviewer can edit the offending numbers.
             preview = await preview_local_group(db, series_key)
             if preview is None:
-                return RedirectResponse(
-                    url="/review", status_code=status.HTTP_303_SEE_OTHER
-                )
+                return RedirectResponse(url="/review", status_code=status.HTTP_303_SEE_OTHER)
             local_volumes = await list_local_volumes(db)
             # Build a {file_id: error_reason} map for the template — one
             # entry per conflicting row, keyed exactly the way the
             # template iterates ``preview.files``.
-            conflict_map = {
-                str(c.file_id): c.reason for c in conflicts
-            }
+            conflict_map = {str(c.file_id): c.reason for c in conflicts}
             return templates.TemplateResponse(
                 request,
                 "review_local_group.html",
@@ -1015,9 +997,7 @@ async def local_group_submit(
     )
     if result is None:
         # Group drained between preview and submit — nothing committed.
-        return RedirectResponse(
-            url="/review", status_code=status.HTTP_303_SEE_OTHER
-        )
+        return RedirectResponse(url="/review", status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(
         url=f"/review?file_local={result.issue_count}",
         status_code=status.HTTP_303_SEE_OTHER,
@@ -1171,7 +1151,9 @@ async def file_reject(
     queue without being confirmed to anything. POST-only so a stray
     prefetch can't trip it."""
     ok = await reject_file_match(
-        db, file_id=file_id, matched_by_user_id=user.id,
+        db,
+        file_id=file_id,
+        matched_by_user_id=user.id,
     )
     if not ok:
         raise HTTPException(
@@ -1282,9 +1264,7 @@ async def file_local_entry_submit(
 # its own issue-picker template.
 
 
-async def _file_volume_search(
-    db, review, q: str | None
-) -> tuple[str, str, list[dict], str | None]:
+async def _file_volume_search(db, review, q: str | None) -> tuple[str, str, list[dict], str | None]:
     """Run the per-file ComicVine volume search shared by the manual
     issue-match and the supplement-attach flows.
 
@@ -1293,10 +1273,7 @@ async def _file_volume_search(
     error)`` — results are publisher-enriched and ready to render."""
     series = (
         review.parsed_long_series
-        if (
-            review.parsed_long_series
-            and review.parsed_long_series != review.parsed_series
-        )
+        if (review.parsed_long_series and review.parsed_long_series != review.parsed_series)
         else review.parsed_series
     )
     raw_query = q if q is not None else (series or "")
@@ -1308,9 +1285,7 @@ async def _file_volume_search(
         client = ComicVineClient()
         try:
             cache = ComicVineCache(client, enqueue_revalidate=enqueue_revalidate)
-            envelope = await cache.search(
-                db, cleaned, resources="volume", limit=50
-            )
+            envelope = await cache.search(db, cleaned, resources="volume", limit=50)
             results = shape_volume_results(envelope)
         except ComicVineKeyMissingError:
             error = (
@@ -1318,19 +1293,14 @@ async def _file_volume_search(
                 "Set one in the admin settings before searching."
             )
         except ComicVineKeyInvalidError:
-            error = (
-                "ComicVine rejected the API key. "
-                "Re-paste it in the admin settings."
-            )
+            error = "ComicVine rejected the API key. Re-paste it in the admin settings."
         except ComicVineError as e:
             error = f"ComicVine search failed: {e}"
         finally:
             await client.aclose()
 
     if results:
-        pub_map = await publishers_for_volumes(
-            db, {r["cv_id"] for r in results}
-        )
+        pub_map = await publishers_for_volumes(db, {r["cv_id"] for r in results})
         for r in results:
             if not r["publisher"]:
                 r["publisher"] = pub_map.get(r["cv_id"])
@@ -1358,9 +1328,7 @@ async def file_volume_search(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No match record for this file.",
         )
-    raw_query, cleaned, results, error = await _file_volume_search(
-        db, review, q
-    )
+    raw_query, cleaned, results, error = await _file_volume_search(db, review, q)
 
     # The shared volume-search template renders in "file mode" when
     # ``review`` is present — switching the reference card, the
@@ -1404,9 +1372,7 @@ async def file_supplement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No match record for this file.",
         )
-    raw_query, cleaned, results, error = await _file_volume_search(
-        db, review, q
-    )
+    raw_query, cleaned, results, error = await _file_volume_search(db, review, q)
     return templates.TemplateResponse(
         request,
         "review_supplement.html",
@@ -1534,7 +1500,9 @@ async def file_volume_issues(
         await client.aclose()
 
     issues = await list_volume_issues(
-        db, volume, suggested_number=review.parsed_issue_number,
+        db,
+        volume,
+        suggested_number=review.parsed_issue_number,
     )
 
     # Center the picker's initial pagination window on the
@@ -1546,9 +1514,7 @@ async def file_volume_issues(
     # window just starts at the top.
     page_size = await get_page_size(db)
     total = len(issues)
-    suggested_index = next(
-        (idx for idx, opt in enumerate(issues) if opt.is_suggested), None
-    )
+    suggested_index = next((idx for idx, opt in enumerate(issues) if opt.is_suggested), None)
     if suggested_index is not None:
         initial_start = max(
             0,

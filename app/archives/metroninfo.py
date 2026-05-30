@@ -131,10 +131,7 @@ def parse_metroninfo(xml_bytes: bytes | None) -> ComicInfoExtract:
     year = _year_from_date(_text(root, "CoverDate"))
     cv_id = _cv_id_from_ids(root)
 
-    status = (
-        ComicInfoStatus.FULL_WITH_CVID if cv_id is not None
-        else ComicInfoStatus.PARTIAL
-    )
+    status = ComicInfoStatus.FULL_WITH_CVID if cv_id is not None else ComicInfoStatus.PARTIAL
 
     return ComicInfoExtract(
         status=status,

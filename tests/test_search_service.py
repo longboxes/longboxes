@@ -59,7 +59,9 @@ def _publisher(cv_id: int, name: str) -> CvPublisher:
 
 
 def _volume(
-    cv_id: int, name: str, *,
+    cv_id: int,
+    name: str,
+    *,
     year: int = 2012,
     publisher_cv_id: int | None = None,
 ) -> CvVolume:
@@ -274,10 +276,12 @@ async def test_issues_only_returned_when_owned(db_session):
     name matches. An issue with an AUTO match should appear."""
     db_session.add(_volume(500, "Some Volume"))
     await db_session.flush()  # volume must exist before issue FKs to it
-    db_session.add_all([
-        _issue(5001, 500, "Origin of Wolverine"),
-        _issue(5002, 500, "Origin of Cyclops"),
-    ])
+    db_session.add_all(
+        [
+            _issue(5001, 500, "Origin of Wolverine"),
+            _issue(5002, 500, "Origin of Cyclops"),
+        ]
+    )
     await db_session.flush()
 
     f = _file("b" * 64)
@@ -370,10 +374,12 @@ async def test_finds_credit_stubs_in_owned_issues(db_session):
 async def test_hydrated_rows_dedupe_with_credit_stubs(db_session):
     """A character that's BOTH hydrated AND mentioned in an owned issue
     should appear once, with the hydrated row's data (icon URL)."""
-    db_session.add_all([
-        _character(60001, "Hydrowolf"),
-        _volume(1200, "Hydra Vol"),
-    ])
+    db_session.add_all(
+        [
+            _character(60001, "Hydrowolf"),
+            _volume(1200, "Hydra Vol"),
+        ]
+    )
     await db_session.flush()  # volume must exist before issue FKs to it
     db_session.add(
         CvIssue(
@@ -504,14 +510,10 @@ async def test_more_available_unset_when_under_cap(db_session):
 async def test_only_kind_restricts_to_one_section(db_session):
     """``only_kind="characters"`` runs only the character query — the
     backbone of the /search?kind=... view."""
-    db_session.add_all(
-        [_volume(7900, "Wolverine"), _character(7901, "Wolverine")]
-    )
+    db_session.add_all([_volume(7900, "Wolverine"), _character(7901, "Wolverine")])
     await db_session.commit()
 
-    r = await search_library(
-        db_session, "wol", limit_per_kind=10, only_kind="characters"
-    )
+    r = await search_library(db_session, "wol", limit_per_kind=10, only_kind="characters")
     assert r.volumes == []
     assert [h.name for h in r.characters] == ["Wolverine"]
 
@@ -522,9 +524,7 @@ async def test_only_kind_unknown_falls_back_to_all(db_session):
     db_session.add(_character(8001, "Wolverine"))
     await db_session.commit()
 
-    r = await search_library(
-        db_session, "wol", limit_per_kind=10, only_kind="frobnitz"
-    )
+    r = await search_library(db_session, "wol", limit_per_kind=10, only_kind="frobnitz")
     assert [h.name for h in r.characters] == ["Wolverine"]
 
 
@@ -541,9 +541,7 @@ class _FakeCvCache:
         self.calls: list[dict] = []
 
     async def search(self, db, query, *, resources, limit, force_refresh=False):
-        self.calls.append(
-            {"query": query, "resources": resources, "limit": limit}
-        )
+        self.calls.append({"query": query, "resources": resources, "limit": limit})
         return self._envelope
 
 
@@ -596,15 +594,10 @@ async def test_cv_search_partitions_by_resource_type(db_session):
     }
     cache = _FakeCvCache(envelope)
 
-    results = await cv_search_catalogue(
-        db_session, cache, "avengers", limit_per_kind=10
-    )
+    results = await cv_search_catalogue(db_session, cache, "avengers", limit_per_kind=10)
 
     assert len(cache.calls) == 1
-    assert (
-        cache.calls[0]["resources"]
-        == "volume,issue,character,person,team,story_arc"
-    )
+    assert cache.calls[0]["resources"] == "volume,issue,character,person,team,story_arc"
 
     # Volume — publisher + year baked into subtitle, link to local page.
     vol = results.volumes[0]
@@ -658,9 +651,7 @@ async def test_cv_search_overflow_sets_more_available(db_session):
         ]
     }
     cache = _FakeCvCache(envelope)
-    results = await cv_search_catalogue(
-        db_session, cache, "saga", limit_per_kind=5
-    )
+    results = await cv_search_catalogue(db_session, cache, "saga", limit_per_kind=5)
     assert len(results.volumes) == 5
     assert "volumes" in results.more_available
 
@@ -670,9 +661,7 @@ async def test_cv_search_only_kind_narrows_resources(db_session):
     query (``resources='character'``) — the drill-down should spend
     its entire rate budget on one bucket."""
     cache = _FakeCvCache({"results": []})
-    await cv_search_catalogue(
-        db_session, cache, "wol", limit_per_kind=10, only_kind="characters"
-    )
+    await cv_search_catalogue(db_session, cache, "wol", limit_per_kind=10, only_kind="characters")
     assert cache.calls[-1]["resources"] == "character"
     # And the limit is the smaller per-bucket probe, not the wider
     # multi-resource fan-out.
@@ -684,9 +673,7 @@ async def test_cv_search_only_kind_unknown_falls_back_to_all(db_session):
     call, mirroring the library search's tolerance for URL-tampered
     kind values."""
     cache = _FakeCvCache({"results": []})
-    await cv_search_catalogue(
-        db_session, cache, "wol", limit_per_kind=10, only_kind="frobnitz"
-    )
+    await cv_search_catalogue(db_session, cache, "wol", limit_per_kind=10, only_kind="frobnitz")
     assert cache.calls[-1]["resources"] == "volume,issue,character,person,team,story_arc"
 
 
@@ -702,7 +689,5 @@ async def test_cv_search_skips_bad_rows(db_session):
         ]
     }
     cache = _FakeCvCache(envelope)
-    results = await cv_search_catalogue(
-        db_session, cache, "real", limit_per_kind=10
-    )
+    results = await cv_search_catalogue(db_session, cache, "real", limit_per_kind=10)
     assert [h.name for h in results.volumes] == ["Real Vol"]

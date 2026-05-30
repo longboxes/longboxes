@@ -204,9 +204,7 @@ async def test_try_open_archive_success_clears_row(db_session, tmp_path):
     assert result is not None
     assert result.ok is True
     # Row is gone.
-    assert (
-        await db_session.execute(select(FileError))
-    ).scalar_one_or_none() is None
+    assert (await db_session.execute(select(FileError))).scalar_one_or_none() is None
 
 
 async def test_try_open_archive_failure_refreshes_row(db_session, tmp_path):
@@ -236,5 +234,6 @@ async def test_try_open_archive_failure_refreshes_row(db_session, tmp_path):
 
 async def test_try_open_archive_returns_none_for_missing_id(db_session):
     import uuid as _uuid
+
     result = await try_open_archive(db_session, _uuid.uuid4())
     assert result is None

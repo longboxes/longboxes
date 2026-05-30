@@ -85,9 +85,7 @@ async def test_get_volume_returns_parsed_results(db_session):
 async def test_get_issue_returns_parsed_results(db_session):
     await _set_key(db_session)
     respx.get(f"{BASE_URL}/issue/4000-99/").mock(
-        return_value=httpx.Response(
-            200, json=_ok_envelope({"id": 99, "name": "issue title"})
-        )
+        return_value=httpx.Response(200, json=_ok_envelope({"id": 99, "name": "issue title"}))
     )
     client = _fast_client()
     try:
@@ -269,9 +267,7 @@ async def test_cv_status_107_rate_limit(db_session):
 @respx.mock
 async def test_500_retries_then_raises(db_session):
     await _set_key(db_session)
-    respx.get(f"{BASE_URL}/volume/4050-1/").mock(
-        return_value=httpx.Response(500, text="oops")
-    )
+    respx.get(f"{BASE_URL}/volume/4050-1/").mock(return_value=httpx.Response(500, text="oops"))
     client = _fast_client()
     try:
         with pytest.raises(ComicVineApiError):

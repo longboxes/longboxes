@@ -81,9 +81,7 @@ def test_parse_arc_name(raw, expected):
         (0, "Empty", None, None, None, "unknown"),
     ],
 )
-def test_classify_volume_format(
-    count, name, deck, description, first_issue, expected
-):
+def test_classify_volume_format(count, name, deck, description, first_issue, expected):
     assert (
         classify_volume_format(
             name=name,
@@ -105,15 +103,10 @@ def test_volume_status_from_themes():
     assert volume_status_from_themes(_themes((61, "Ongoing"))) == "ongoing"
     assert volume_status_from_themes(_themes((52, "Complete"))) == "complete"
     assert volume_status_from_themes(_themes((51, "Cancelled"))) == "cancelled"
-    assert (
-        volume_status_from_themes(_themes((66, "Unfinished"))) == "unfinished"
-    )
+    assert volume_status_from_themes(_themes((66, "Unfinished"))) == "unfinished"
     # CV tagging is messy — when both are present the most terminal
     # status wins (a volume tagged Ongoing + Complete reads complete).
-    assert (
-        volume_status_from_themes(_themes((61, "Ongoing"), (52, "Complete")))
-        == "complete"
-    )
+    assert volume_status_from_themes(_themes((61, "Ongoing"), (52, "Complete"))) == "complete"
     # No status theme / empty / None.
     assert volume_status_from_themes(_themes((2, "Action"))) is None
     assert volume_status_from_themes([]) is None
@@ -140,9 +133,9 @@ def test_sort_key_issue_number_natural_order():
     ordered = sorted(shuffled, key=sort_key_issue_number)
     assert ordered == ["0", "1", "1.MU", "2", "10", "Annual 1", None, ""]
     # The key is a tuple, so it's a stable, comparable sort key.
-    assert sort_key_issue_number("1")[0] == 0      # numeric bucket
+    assert sort_key_issue_number("1")[0] == 0  # numeric bucket
     assert sort_key_issue_number("Annual 1")[0] == 1  # non-numeric bucket
-    assert sort_key_issue_number(None)[0] == 2     # nulls-last bucket
+    assert sort_key_issue_number(None)[0] == 2  # nulls-last bucket
 
 
 def test_classify_cv_volume_prefers_scraped_theme_type():

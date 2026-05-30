@@ -119,9 +119,7 @@ def test_parity_comicinfo_absent(tmp_path: Path, both_backends: list[str]):
 def test_parity_extract_page_roundtrip(tmp_path: Path, both_backends: list[str]):
     """Page bytes survive the extract path unchanged on both backends."""
     payload = b"DISTINCT-PAGE-CONTENT-1234567890"
-    built = build_cbz(
-        tmp_path / "rt.cbz", page_count=1, page_payload=payload
-    )
+    built = build_cbz(tmp_path / "rt.cbz", page_count=1, page_payload=payload)
     results = {b: _read(built.path, b) for b in both_backends}
     _, _, page_stdlib = results["stdlib"]
     _, _, page_comicbox = results["comicbox"]

@@ -76,12 +76,8 @@ def upgrade() -> None:
         # ``INSERT ... ON CONFLICT (path, kind)`` can target.
         sa.UniqueConstraint("path", "kind", name="uq_file_errors_path_kind"),
     )
-    op.create_index(
-        "ix_file_errors_kind", "file_errors", ["kind"]
-    )
-    op.create_index(
-        "ix_file_errors_path", "file_errors", ["path"]
-    )
+    op.create_index("ix_file_errors_kind", "file_errors", ["kind"])
+    op.create_index("ix_file_errors_path", "file_errors", ["path"])
 
 
 def downgrade() -> None:

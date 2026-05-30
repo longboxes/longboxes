@@ -70,7 +70,9 @@ class CvVolume(Base):
     # ``raw_payload`` (like ``reading_direction``) so it survives cache
     # revalidation — the volume upsert's ``set_`` doesn't name it.
     themes: Mapped[list] = mapped_column(
-        JSONB, nullable=False, server_default=text("'[]'::jsonb"),
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
         default=list,
     )
     # Stamped when the themes scrape last ran (whatever the outcome),
@@ -107,9 +109,7 @@ class CvIssue(Base):
     cover_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    fetched_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Best-effort site-page scrape marker. Set (to "now") the first time
     # the ComicVine *website* scraper runs for this issue — whether or
     # not it filled any gaps — so the issue page fires that one-shot
@@ -117,9 +117,7 @@ class CvIssue(Base):
     # ComicVine field: it survives API revalidation because the cache's
     # issue upsert ``set_`` (and the bulk-hydrate ``set_``) don't name
     # it — same posture as ``CvVolume.reading_direction``.
-    site_scraped_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    site_scraped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ---- "Just (cv_id, name, raw_payload, fetched_at)" entities ------------

@@ -138,9 +138,7 @@ def parse_comicinfo(xml_bytes: bytes | None) -> ComicInfoExtract:
     number = _text(root, "Number")
     year = _int(root, "Year")
 
-    status = (
-        ComicInfoStatus.FULL_WITH_CVID if cv_id is not None else ComicInfoStatus.PARTIAL
-    )
+    status = ComicInfoStatus.FULL_WITH_CVID if cv_id is not None else ComicInfoStatus.PARTIAL
 
     return ComicInfoExtract(
         status=status,

@@ -41,9 +41,7 @@ def _patch_redis(monkeypatch, conn):
     the same fakeredis connection. Same pattern as
     ``tests/test_revalidate.py``'s helper; without it the route would
     look up the real Redis URL from settings."""
-    fake_redis_class = type(
-        "R", (), {"from_url": staticmethod(lambda url: conn)}
-    )
+    fake_redis_class = type("R", (), {"from_url": staticmethod(lambda url: conn)})
     monkeypatch.setattr(revalidate_mod, "Redis", fake_redis_class)
     monkeypatch.setattr(queue_status_mod, "Redis", fake_redis_class)
 
@@ -187,7 +185,10 @@ async def test_covers_polling_per_issue_fallback_dedupes_in_flight(
     # First tick — per-issue job lands on the interactive queue
     # (browse-page surface uses the interactive enqueue wrapper).
     await volume_confirm_covers_hydration(
-        user=None, db=db_session, volume_cv_id=cv_id, ids="555",  # type: ignore[arg-type]
+        user=None,
+        db=db_session,
+        volume_cv_id=cv_id,
+        ids="555",  # type: ignore[arg-type]
     )
     queue = Queue("interactive", connection=conn)
     after_first = list(queue.job_ids)
@@ -198,7 +199,10 @@ async def test_covers_polling_per_issue_fallback_dedupes_in_flight(
     # fake setup), so ``enqueue_revalidate`` no-ops. Queue stays the
     # same length.
     await volume_confirm_covers_hydration(
-        user=None, db=db_session, volume_cv_id=cv_id, ids="555",  # type: ignore[arg-type]
+        user=None,
+        db=db_session,
+        volume_cv_id=cv_id,
+        ids="555",  # type: ignore[arg-type]
     )
     after_second = list(queue.job_ids)
     assert after_first == after_second
@@ -245,7 +249,10 @@ async def test_covers_polling_surfaces_rate_limit_cooldown_via_marker(
     from app.review.routes import volume_confirm_covers_hydration
 
     response = await volume_confirm_covers_hydration(
-        user=None, db=db_session, volume_cv_id=cv_id, ids="777",  # type: ignore[arg-type]
+        user=None,
+        db=db_session,
+        volume_cv_id=cv_id,
+        ids="777",  # type: ignore[arg-type]
     )
 
     # The polling endpoint surfaces the cooldown state from the marker

@@ -214,9 +214,7 @@ class ComicVineClient:
 
     # ---- Internals ------------------------------------------------------
 
-    async def _get_resource(
-        self, db: AsyncSession, resource_type: str, resource_id: str
-    ) -> dict:
+    async def _get_resource(self, db: AsyncSession, resource_type: str, resource_id: str) -> dict:
         """Single-resource GET. Path is /{resource_type}/{4xxx-id}/.
 
         Trailing slash is required: CV returns 301 → trailing-slash form
@@ -320,9 +318,7 @@ class ComicVineClient:
             try:
                 envelope = response.json()
             except ValueError as e:
-                raise ComicVineApiError(
-                    f"ComicVine returned non-JSON body: {e}"
-                ) from e
+                raise ComicVineApiError(f"ComicVine returned non-JSON body: {e}") from e
 
             cv_status = envelope.get("status_code")
             if cv_status == CV_STATUS_OK:
@@ -369,9 +365,7 @@ class ComicVineClient:
             )
 
         # Shouldn't be reachable, but make the type checker happy.
-        raise ComicVineApiError(
-            "exhausted retries without a response"
-        ) from last_exc
+        raise ComicVineApiError("exhausted retries without a response") from last_exc
 
     @staticmethod
     async def _sleep_with_backoff(attempt: int) -> None:
@@ -446,8 +440,7 @@ async def validate_cv_api_key(
             )
         return (
             False,
-            f"Unexpected ComicVine status {cv_status} during "
-            "validation; the key may not be valid.",
+            f"Unexpected ComicVine status {cv_status} during validation; the key may not be valid.",
         )
     finally:
         if owns_client:

@@ -42,14 +42,10 @@ class ReadProgress(Base):
     page: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Snapshot of the archive's page count at save time — lets the home
     # page show progress without reopening the file.
-    page_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Set the first time the last page is reached; sticky afterwards.
     # NULL means the comic is still in progress.
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

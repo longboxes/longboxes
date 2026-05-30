@@ -166,7 +166,7 @@ async def test_match_status_breakdown(db_session):
 
 async def test_projected_auto_rate_pre_matcher(db_session):
     """4 full_with_cvid + 4 partial + 4 none. Expected projection:
-       (4*1.0 + 4*0.8 + 4*0.45) / 12 = (4 + 3.2 + 1.8) / 12 = 0.75
+    (4*1.0 + 4*0.8 + 4*0.45) / 12 = (4 + 3.2 + 1.8) / 12 = 0.75
     """
     for status in (
         [ComicInfoStatus.FULL_WITH_CVID] * 4

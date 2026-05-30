@@ -256,9 +256,7 @@ async def test_lists_volumes_with_owned_and_missing(db_session):
 
 async def test_filter_by_publisher(db_session):
     await _make_library(db_session)
-    rows, total = await list_library_volumes(
-        db_session, LibraryFilters(publisher_cv_id=31)
-    )
+    rows, total = await list_library_volumes(db_session, LibraryFilters(publisher_cv_id=31))
     assert [r.cv_id for r in rows] == [100]
     assert total == 1
 
@@ -268,13 +266,9 @@ async def test_filter_by_year(db_session):
     matching start_year directly (the volumes in this fixture have
     year=1991 for X-Men and year=2012 for Saga)."""
     await _make_library(db_session)
-    rows, _total = await list_library_volumes(
-        db_session, LibraryFilters(year=1991)
-    )
+    rows, _total = await list_library_volumes(db_session, LibraryFilters(year=1991))
     assert [r.cv_id for r in rows] == [200]
-    rows, _total = await list_library_volumes(
-        db_session, LibraryFilters(year=2012)
-    )
+    rows, _total = await list_library_volumes(db_session, LibraryFilters(year=2012))
     assert [r.cv_id for r in rows] == [100]
 
 
@@ -290,37 +284,34 @@ async def test_filter_by_year_uses_hydrated_boundary_issues(db_session):
     db_session.add(_publisher(10, "DC"))
     await db_session.flush()
     db_session.add(
-        _volume(300, "Action Comics", year=1938, publisher_cv_id=10,
-                count_of_issues=904)
+        _volume(300, "Action Comics", year=1938, publisher_cv_id=10, count_of_issues=904)
     )
     await db_session.flush()
-    db_session.add_all([
-        # first_issue — hydrated by the boundary-hydration enqueue.
-        _issue(3001, volume_cv_id=300, issue_number="1",
-               cover_date=date(1938, 6, 1)),
-        # Mid-run issues — still stubs (cover_date=None).
-        _issue(3500, volume_cv_id=300, issue_number="500"),
-        # last_issue — hydrated by the boundary-hydration enqueue.
-        _issue(3904, volume_cv_id=300, issue_number="904",
-               cover_date=date(2011, 9, 1)),
-    ])
+    db_session.add_all(
+        [
+            # first_issue — hydrated by the boundary-hydration enqueue.
+            _issue(3001, volume_cv_id=300, issue_number="1", cover_date=date(1938, 6, 1)),
+            # Mid-run issues — still stubs (cover_date=None).
+            _issue(3500, volume_cv_id=300, issue_number="500"),
+            # last_issue — hydrated by the boundary-hydration enqueue.
+            _issue(3904, volume_cv_id=300, issue_number="904", cover_date=date(2011, 9, 1)),
+        ]
+    )
     file_ = _file("d" * 64)
     db_session.add(file_)
     await db_session.flush()
-    db_session.add_all([
-        _location(file_.id, "/library/ac1.cbz"),
-        _match(file_.id, 3001),
-    ])
+    db_session.add_all(
+        [
+            _location(file_.id, "/library/ac1.cbz"),
+            _match(file_.id, 3001),
+        ]
+    )
     await db_session.commit()
     # 2010 should match — last_issue is 2011-09-01.
-    rows, _ = await list_library_volumes(
-        db_session, LibraryFilters(year=2010)
-    )
+    rows, _ = await list_library_volumes(db_session, LibraryFilters(year=2010))
     assert [r.cv_id for r in rows] == [300]
     # 2012 should NOT match — past the last_issue year.
-    rows, _ = await list_library_volumes(
-        db_session, LibraryFilters(year=2012)
-    )
+    rows, _ = await list_library_volumes(db_session, LibraryFilters(year=2012))
     assert rows == []
 
 
@@ -331,34 +322,32 @@ async def test_filter_by_year_spans_running_volumes(db_session):
     db_session.add(_publisher(31, "Image"))
     await db_session.flush()
     # Saga: started 2012, issues dated 2012 → 2014.
-    db_session.add(
-        _volume(100, "Saga", year=2012, publisher_cv_id=31, count_of_issues=3)
-    )
+    db_session.add(_volume(100, "Saga", year=2012, publisher_cv_id=31, count_of_issues=3))
     await db_session.flush()
-    db_session.add_all([
-        _issue(1001, volume_cv_id=100, issue_number="1", cover_date=date(2012, 6, 1)),
-        _issue(1002, volume_cv_id=100, issue_number="2", cover_date=date(2013, 6, 1)),
-        _issue(1003, volume_cv_id=100, issue_number="3", cover_date=date(2014, 6, 1)),
-    ])
+    db_session.add_all(
+        [
+            _issue(1001, volume_cv_id=100, issue_number="1", cover_date=date(2012, 6, 1)),
+            _issue(1002, volume_cv_id=100, issue_number="2", cover_date=date(2013, 6, 1)),
+            _issue(1003, volume_cv_id=100, issue_number="3", cover_date=date(2014, 6, 1)),
+        ]
+    )
     file_ = _file("a" * 64)
     db_session.add(file_)
     await db_session.flush()
-    db_session.add_all([
-        _location(file_.id, "/library/saga1.cbz"),
-        _match(file_.id, 1001),
-    ])
+    db_session.add_all(
+        [
+            _location(file_.id, "/library/saga1.cbz"),
+            _match(file_.id, 1001),
+        ]
+    )
     await db_session.commit()
     # Filtering by any year in [2012, 2014] matches Saga.
     for year in (2012, 2013, 2014):
-        rows, _total = await list_library_volumes(
-            db_session, LibraryFilters(year=year)
-        )
+        rows, _total = await list_library_volumes(db_session, LibraryFilters(year=year))
         assert [r.cv_id for r in rows] == [100], f"year={year}"
     # Years outside the span don't match.
     for year in (2011, 2015):
-        rows, _total = await list_library_volumes(
-            db_session, LibraryFilters(year=year)
-        )
+        rows, _total = await list_library_volumes(db_session, LibraryFilters(year=year))
         assert rows == [], f"year={year}"
 
 
@@ -373,9 +362,7 @@ async def test_filter_has_missing_only_excludes_complete(db_session):
     await db_session.flush()
     db_session.add_all([_location(file3.id, "/library/xmen2.cbz"), _match(file3.id, 2002)])
     await db_session.commit()
-    rows, _total = await list_library_volumes(
-        db_session, LibraryFilters(has_missing_only=True)
-    )
+    rows, _total = await list_library_volumes(db_session, LibraryFilters(has_missing_only=True))
     assert [r.cv_id for r in rows] == [100]  # only Saga still has missing issues
 
 
@@ -391,15 +378,11 @@ async def test_name_query_substring_match(db_session):
     assert [r.cv_id for r in rows_saga] == [100]
     assert total_saga == 1
     # ``men`` is a substring of "X-Men".
-    rows_men, _ = await list_library_volumes(
-        db_session, LibraryFilters(name_query="men")
-    )
+    rows_men, _ = await list_library_volumes(db_session, LibraryFilters(name_query="men"))
     assert [r.cv_id for r in rows_men] == [200]
     # ``%`` is escaped, so it doesn't match anything (no volume
     # actually contains a literal percent sign).
-    rows_pct, _ = await list_library_volumes(
-        db_session, LibraryFilters(name_query="%")
-    )
+    rows_pct, _ = await list_library_volumes(db_session, LibraryFilters(name_query="%"))
     assert rows_pct == []
     # Empty/whitespace query is a no-op.
     rows_blank, total_blank = await list_library_volumes(
@@ -412,14 +395,10 @@ async def test_name_starts_with_letter(db_session):
     """``name_starts_with='X'`` returns X-Men only; 'S' returns Saga
     only; the case-insensitive 's' matches the same as 'S'."""
     await _make_library(db_session)
-    rows_x, total_x = await list_library_volumes(
-        db_session, LibraryFilters(name_starts_with="X")
-    )
+    rows_x, total_x = await list_library_volumes(db_session, LibraryFilters(name_starts_with="X"))
     assert [r.cv_id for r in rows_x] == [200]
     assert total_x == 1
-    rows_s, _ = await list_library_volumes(
-        db_session, LibraryFilters(name_starts_with="s")
-    )
+    rows_s, _ = await list_library_volumes(db_session, LibraryFilters(name_starts_with="s"))
     assert [r.cv_id for r in rows_s] == [100]
 
 
@@ -580,7 +559,10 @@ async def test_volume_detail_credit_filter(db_session):
 
     # Team filter -> only the credited issues, kept in volume order.
     by_team = await get_volume_detail(
-        db_session, 100, cv_cache=cache, credit_filter=("team", 850),
+        db_session,
+        100,
+        cv_cache=cache,
+        credit_filter=("team", 850),
     )
     assert [i.cv_id for i in by_team.issues] == [1001, 1003]
     assert [i.issue_number for i in by_team.issues] == ["1", "3"]
@@ -594,7 +576,10 @@ async def test_volume_detail_credit_filter(db_session):
 
     # Creator filter -> the ``issues`` fallback key, via get_person.
     by_creator = await get_volume_detail(
-        db_session, 100, cv_cache=cache, credit_filter=("creator", 700),
+        db_session,
+        100,
+        cv_cache=cache,
+        credit_filter=("creator", 700),
     )
     assert [i.cv_id for i in by_creator.issues] == [1002]
     assert by_creator.credit_filter.kind == "creator"
@@ -603,7 +588,10 @@ async def test_volume_detail_credit_filter(db_session):
 
     # Character filter -> a character's issue_credits, via get_character.
     by_character = await get_volume_detail(
-        db_session, 100, cv_cache=cache, credit_filter=("character", 600),
+        db_session,
+        100,
+        cv_cache=cache,
+        credit_filter=("character", 600),
     )
     assert [i.cv_id for i in by_character.issues] == [1002, 1003]
     assert by_character.credit_filter.kind == "character"
@@ -611,7 +599,10 @@ async def test_volume_detail_credit_filter(db_session):
 
     # An unresolved entity leaves the volume unfiltered.
     missing = await get_volume_detail(
-        db_session, 100, cv_cache=cache, credit_filter=("team", 999999),
+        db_session,
+        100,
+        cv_cache=cache,
+        credit_filter=("team", 999999),
     )
     assert missing.credit_filter is None
     assert len(missing.issues) == 3
@@ -792,20 +783,18 @@ async def test_volume_detail_arc_boundary_arrows(db_session):
     detail = await get_volume_detail(db_session, 100, cv_cache=_StubArcCache())
     by_num = {i.issue_number: i for i in detail.issues}
     # Row #1: ← arrow to external prev (9000), no →
-    assert [
-        (link.arc.cv_id, link.issue_cv_id)
-        for link in by_num["1"].prev_arc_links
-    ] == [(7, 9000)]
+    assert [(link.arc.cv_id, link.issue_cv_id) for link in by_num["1"].prev_arc_links] == [
+        (7, 9000)
+    ]
     assert by_num["1"].next_arc_links == []
     # Row #2: nothing
     assert by_num["2"].prev_arc_links == []
     assert by_num["2"].next_arc_links == []
     # Row #3: no ←, → arrow to external next (9001)
     assert by_num["3"].prev_arc_links == []
-    assert [
-        (link.arc.cv_id, link.issue_cv_id)
-        for link in by_num["3"].next_arc_links
-    ] == [(7, 9001)]
+    assert [(link.arc.cv_id, link.issue_cv_id) for link in by_num["3"].next_arc_links] == [
+        (7, 9001)
+    ]
     # Text-color palette is populated alongside bg palette
     assert 7 in detail.arc_text_color_classes
     assert detail.arc_text_color_classes[7].startswith("text-")
@@ -1026,12 +1015,12 @@ async def test_volume_detail_gallery_segments_group_by_arc_fingerprint(db_sessio
     # segment has arc A → SHOW → for A. Arc B's prev (9000) is elsewhere;
     # no preceding segment has B → SHOW ← for B. Arc B's next (9002) is
     # elsewhere; following segment doesn't have B → SHOW → for B.
-    assert segs[1].prev_links[0] is None                       # A ←: suppressed
-    assert segs[1].next_links[0] is not None                   # A →: 9001
+    assert segs[1].prev_links[0] is None  # A ←: suppressed
+    assert segs[1].next_links[0] is not None  # A →: 9001
     assert segs[1].next_links[0].issue_cv_id == 9001
-    assert segs[1].prev_links[1] is not None                   # B ←: 9000
+    assert segs[1].prev_links[1] is not None  # B ←: 9000
     assert segs[1].prev_links[1].issue_cv_id == 9000
-    assert segs[1].next_links[1] is not None                   # B →: 9002
+    assert segs[1].next_links[1] is not None  # B →: 9002
     assert segs[1].next_links[1].issue_cv_id == 9002
 
     # Seg 2 has no arcs → no link slots
@@ -1129,9 +1118,7 @@ async def test_issue_detail_returns_matched_files(db_session):
 
 
 async def test_issue_detail_returns_none_for_unknown(db_session):
-    assert (
-        await get_issue_detail(db_session, _NoCallCache(db_session), 99999) is None
-    )
+    assert await get_issue_detail(db_session, _NoCallCache(db_session), 99999) is None
 
 
 async def test_issue_detail_extracts_credits_from_payload(db_session):
@@ -1174,28 +1161,34 @@ async def test_arc_detail_assembles_members_across_volumes(db_session):
 
     db_session.add_all([_publisher(10, "Marvel"), _publisher(31, "Image")])
     await db_session.flush()
-    db_session.add_all([
-        _volume(100, "Saga", year=2012, publisher_cv_id=31, count_of_issues=3),
-        _volume(200, "Other Vol", year=2013, publisher_cv_id=10),
-    ])
+    db_session.add_all(
+        [
+            _volume(100, "Saga", year=2012, publisher_cv_id=31, count_of_issues=3),
+            _volume(200, "Other Vol", year=2013, publisher_cv_id=10),
+        ]
+    )
     await db_session.flush()
-    db_session.add_all([
-        # Saga #1 and #2 are in the arc; Saga #3 isn't.
-        _issue(1001, volume_cv_id=100, issue_number="1"),
-        _issue(1002, volume_cv_id=100, issue_number="2"),
-        # Other Vol #5 also in the arc.
-        _issue(2005, volume_cv_id=200, issue_number="5"),
-    ])
+    db_session.add_all(
+        [
+            # Saga #1 and #2 are in the arc; Saga #3 isn't.
+            _issue(1001, volume_cv_id=100, issue_number="1"),
+            _issue(1002, volume_cv_id=100, issue_number="2"),
+            # Other Vol #5 also in the arc.
+            _issue(2005, volume_cv_id=200, issue_number="5"),
+        ]
+    )
     files = [_file(f"{i:064x}") for i in range(2)]
     db_session.add_all(files)
     await db_session.flush()
-    db_session.add_all([
-        _location(files[0].id, "/library/saga1.cbz"),
-        _location(files[1].id, "/library/other5.cbz"),
-        _match(files[0].id, 1001),   # own Saga #1
-        _match(files[1].id, 2005),   # own Other Vol #5
-        # Saga #2 missing.
-    ])
+    db_session.add_all(
+        [
+            _location(files[0].id, "/library/saga1.cbz"),
+            _location(files[1].id, "/library/other5.cbz"),
+            _match(files[0].id, 1001),  # own Saga #1
+            _match(files[1].id, 2005),  # own Other Vol #5
+            # Saga #2 missing.
+        ]
+    )
     # Arc payload: 4 members in arc-reading order. Member 4 is a
     # cross-over from a volume we don't have cached at all — should
     # fall back to the nested data.
@@ -1307,14 +1300,10 @@ async def test_recently_added_groups_by_volume(db_session):
 
 def _local_volume(name, *, year=2019, publisher_name=None) -> LocalVolume:
     # Explicit id so issues/matches can reference it before the flush.
-    return LocalVolume(
-        id=uuid.uuid4(), name=name, year=year, publisher_name=publisher_name
-    )
+    return LocalVolume(id=uuid.uuid4(), name=name, year=year, publisher_name=publisher_name)
 
 
-def _local_issue(
-    local_volume_id, *, issue_number, name=None, cover_date=None
-) -> LocalIssue:
+def _local_issue(local_volume_id, *, issue_number, name=None, cover_date=None) -> LocalIssue:
     return LocalIssue(
         id=uuid.uuid4(),
         local_volume_id=local_volume_id,
@@ -1368,8 +1357,11 @@ async def _make_local_volume(
 
 async def test_local_volume_appears_in_library(db_session):
     lv, _issues = await _make_local_volume(
-        db_session, "My Indie Series", ["1", "2"],
-        year=2019, publisher_name="self-published",
+        db_session,
+        "My Indie Series",
+        ["1", "2"],
+        year=2019,
+        publisher_name="self-published",
     )
     rows, total = await list_library_volumes(db_session)
     assert total == 1 and len(rows) == 1
@@ -1406,9 +1398,7 @@ async def test_publisher_facet_excludes_local_volumes(db_session):
     await _make_local_volume(db_session, "Indie Press", ["1"])
     # A CV-publisher facet can't match a free-text local publisher, so
     # local volumes drop out of a publisher-filtered list entirely.
-    rows, total = await list_library_volumes(
-        db_session, LibraryFilters(publisher_cv_id=31)
-    )
+    rows, total = await list_library_volumes(db_session, LibraryFilters(publisher_cv_id=31))
     assert total == 1
     assert [r.cv_id for r in rows] == [100]
     assert all(r.kind == "cv" for r in rows)
@@ -1419,9 +1409,7 @@ async def test_has_missing_only_excludes_local_volumes(db_session):
     await _make_local_volume(db_session, "Indie Press", ["1"])
     # A local volume has no CV issue total, so "missing" is undefined —
     # has_missing_only drops them.
-    rows, _total = await list_library_volumes(
-        db_session, LibraryFilters(has_missing_only=True)
-    )
+    rows, _total = await list_library_volumes(db_session, LibraryFilters(has_missing_only=True))
     assert all(r.kind == "cv" for r in rows)
     assert "Indie Press" not in [r.name for r in rows]
 
@@ -1435,16 +1423,16 @@ async def test_pagination_spans_cv_and_local(db_session):
     page2, _ = await list_library_volumes(db_session, limit=1, offset=2)
     assert total == 3
     assert [page0[0].name, page1[0].name, page2[0].name] == [
-        "Indie Press", "Saga", "X-Men",
+        "Indie Press",
+        "Saga",
+        "X-Men",
     ]
     assert page0[0].kind == "local"
 
 
 async def test_get_local_volume_detail(db_session):
     # Issues created out of order — the detail builder must sort them.
-    lv, _issues = await _make_local_volume(
-        db_session, "My Indie Series", ["2", "1", "10"]
-    )
+    lv, _issues = await _make_local_volume(db_session, "My Indie Series", ["2", "1", "10"])
     detail = await get_local_volume_detail(db_session, lv.id)
     assert detail is not None
     assert detail.name == "My Indie Series"
@@ -1460,9 +1448,7 @@ async def test_get_local_volume_detail_none_for_unknown(db_session):
 
 
 async def test_get_local_issue_detail(db_session):
-    lv, issues = await _make_local_volume(
-        db_session, "My Indie Series", ["1", "2", "3"]
-    )
+    lv, issues = await _make_local_volume(db_session, "My Indie Series", ["1", "2", "3"])
     detail = await get_local_issue_detail(db_session, issues[1].id)  # #2
     assert detail is not None
     assert detail.issue_number == "2"
@@ -1538,11 +1524,18 @@ async def test_recently_added_includes_local_volumes(db_session):
 
 async def test_update_local_volume(db_session):
     lv, _issues = await _make_local_volume(
-        db_session, "Typo Name", ["1"], year=2018, publisher_name="oops",
+        db_session,
+        "Typo Name",
+        ["1"],
+        year=2018,
+        publisher_name="oops",
     )
     result = await update_local_volume(
-        db_session, lv.id,
-        name="Fixed Name", year=2020, publisher_name="Real Publisher",
+        db_session,
+        lv.id,
+        name="Fixed Name",
+        year=2020,
+        publisher_name="Real Publisher",
         description="A self-published mini-series.",
     )
     assert result is not None
@@ -1555,17 +1548,29 @@ async def test_update_local_volume(db_session):
 
 async def test_update_local_volume_blank_fields_clear_to_none(db_session):
     lv, _issues = await _make_local_volume(
-        db_session, "Indie", ["1"], year=2018, publisher_name="self-published",
+        db_session,
+        "Indie",
+        ["1"],
+        year=2018,
+        publisher_name="self-published",
     )
     # Give it a description first so the clear below is meaningful.
     await update_local_volume(
-        db_session, lv.id, name="Indie", year=2018,
-        publisher_name="self-published", description="A blurb.",
+        db_session,
+        lv.id,
+        name="Indie",
+        year=2018,
+        publisher_name="self-published",
+        description="A blurb.",
     )
     # Blank year / whitespace publisher + description normalise to NULL.
     await update_local_volume(
-        db_session, lv.id, name="Indie", year=None,
-        publisher_name="   ", description="   ",
+        db_session,
+        lv.id,
+        name="Indie",
+        year=None,
+        publisher_name="   ",
+        description="   ",
     )
     detail = await get_local_volume_detail(db_session, lv.id)
     assert detail.year is None
@@ -1575,8 +1580,12 @@ async def test_update_local_volume_blank_fields_clear_to_none(db_session):
 
 async def test_update_local_volume_none_for_unknown(db_session):
     result = await update_local_volume(
-        db_session, uuid.uuid4(),
-        name="X", year=None, publisher_name=None, description=None,
+        db_session,
+        uuid.uuid4(),
+        name="X",
+        year=None,
+        publisher_name=None,
+        description=None,
     )
     assert result is None
 
@@ -1584,8 +1593,11 @@ async def test_update_local_volume_none_for_unknown(db_session):
 async def test_update_local_issue(db_session):
     _lv, issues = await _make_local_volume(db_session, "Indie", ["1"])
     result = await update_local_issue(
-        db_session, issues[0].id,
-        issue_number="2", name="Renamed Chapter", cover_date=date(2019, 5, 1),
+        db_session,
+        issues[0].id,
+        issue_number="2",
+        name="Renamed Chapter",
+        cover_date=date(2019, 5, 1),
     )
     assert result is not None
     detail = await get_local_issue_detail(db_session, issues[0].id)
@@ -1597,8 +1609,11 @@ async def test_update_local_issue(db_session):
 async def test_update_local_issue_blank_fields_clear_to_none(db_session):
     _lv, issues = await _make_local_volume(db_session, "Indie", ["1"])
     await update_local_issue(
-        db_session, issues[0].id,
-        issue_number="  ", name="", cover_date=None,
+        db_session,
+        issues[0].id,
+        issue_number="  ",
+        name="",
+        cover_date=None,
     )
     detail = await get_local_issue_detail(db_session, issues[0].id)
     assert detail.issue_number is None
@@ -1608,21 +1623,32 @@ async def test_update_local_issue_blank_fields_clear_to_none(db_session):
 
 async def test_update_local_issue_none_for_unknown(db_session):
     result = await update_local_issue(
-        db_session, uuid.uuid4(),
-        issue_number="1", name=None, cover_date=None,
+        db_session,
+        uuid.uuid4(),
+        issue_number="1",
+        name=None,
+        cover_date=None,
     )
     assert result is None
 
 
 async def test_merge_local_volumes(db_session):
     keep, _ = await _make_local_volume(
-        db_session, "Keep", ["1", "2"], sha_offset=100,
+        db_session,
+        "Keep",
+        ["1", "2"],
+        sha_offset=100,
     )
     dupe, _ = await _make_local_volume(
-        db_session, "Dupe", ["3", "4"], sha_offset=200,
+        db_session,
+        "Dupe",
+        ["3", "4"],
+        sha_offset=200,
     )
     result = await merge_local_volumes(
-        db_session, target_id=keep.id, source_id=dupe.id,
+        db_session,
+        target_id=keep.id,
+        source_id=dupe.id,
     )
     assert result is not None
     assert result.moved_issue_count == 2
@@ -1635,10 +1661,15 @@ async def test_merge_local_volumes(db_session):
 
 async def test_merge_local_volumes_into_self_rejected(db_session):
     keep, _ = await _make_local_volume(
-        db_session, "Solo", ["1"], sha_offset=100,
+        db_session,
+        "Solo",
+        ["1"],
+        sha_offset=100,
     )
     result = await merge_local_volumes(
-        db_session, target_id=keep.id, source_id=keep.id,
+        db_session,
+        target_id=keep.id,
+        source_id=keep.id,
     )
     assert result is None
     # The volume is untouched.
@@ -1647,23 +1678,36 @@ async def test_merge_local_volumes_into_self_rejected(db_session):
 
 async def test_merge_local_volumes_unknown_source(db_session):
     keep, _ = await _make_local_volume(
-        db_session, "Keep", ["1"], sha_offset=100,
+        db_session,
+        "Keep",
+        ["1"],
+        sha_offset=100,
     )
     result = await merge_local_volumes(
-        db_session, target_id=keep.id, source_id=uuid.uuid4(),
+        db_session,
+        target_id=keep.id,
+        source_id=uuid.uuid4(),
     )
     assert result is None
 
 
 async def test_merge_local_volumes_reflected_in_library(db_session):
     keep, _ = await _make_local_volume(
-        db_session, "Keep", ["1", "2"], sha_offset=100,
+        db_session,
+        "Keep",
+        ["1", "2"],
+        sha_offset=100,
     )
     dupe, _ = await _make_local_volume(
-        db_session, "Dupe", ["3"], sha_offset=200,
+        db_session,
+        "Dupe",
+        ["3"],
+        sha_offset=200,
     )
     await merge_local_volumes(
-        db_session, target_id=keep.id, source_id=dupe.id,
+        db_session,
+        target_id=keep.id,
+        source_id=dupe.id,
     )
     rows, total = await list_library_volumes(db_session)
     # Only the surviving volume is left, owning all three issues.
@@ -1680,26 +1724,30 @@ async def _seed_format_library(db_session) -> None:
     series (5) — each with one owned issue, so both show in /library."""
     db_session.add(_publisher(31, "Image"))
     await db_session.flush()
-    db_session.add_all([
-        _volume(100, "Ongoing One", year=2012, publisher_cv_id=31,
-                count_of_issues=20),
-        _volume(200, "Limited One", year=2015, publisher_cv_id=31,
-                count_of_issues=5),
-    ])
+    db_session.add_all(
+        [
+            _volume(100, "Ongoing One", year=2012, publisher_cv_id=31, count_of_issues=20),
+            _volume(200, "Limited One", year=2015, publisher_cv_id=31, count_of_issues=5),
+        ]
+    )
     await db_session.flush()
-    db_session.add_all([
-        _issue(1001, volume_cv_id=100, issue_number="1"),
-        _issue(2001, volume_cv_id=200, issue_number="1"),
-    ])
+    db_session.add_all(
+        [
+            _issue(1001, volume_cv_id=100, issue_number="1"),
+            _issue(2001, volume_cv_id=200, issue_number="1"),
+        ]
+    )
     files = [_file(f"{i:064x}") for i in range(2)]
     db_session.add_all(files)
     await db_session.flush()
-    db_session.add_all([
-        _location(files[0].id, "/library/a.cbz"),
-        _location(files[1].id, "/library/b.cbz"),
-        _match(files[0].id, 1001),
-        _match(files[1].id, 2001),
-    ])
+    db_session.add_all(
+        [
+            _location(files[0].id, "/library/a.cbz"),
+            _location(files[1].id, "/library/b.cbz"),
+            _match(files[0].id, 1001),
+            _match(files[1].id, 2001),
+        ]
+    )
     await db_session.commit()
 
 
@@ -1714,14 +1762,10 @@ async def test_library_rows_carry_classified_format(db_session):
 
 async def test_library_format_facet_filters(db_session):
     await _seed_format_library(db_session)
-    rows, total = await list_library_volumes(
-        db_session, LibraryFilters(format="limited")
-    )
+    rows, total = await list_library_volumes(db_session, LibraryFilters(format="limited"))
     assert total == 1
     assert [r.cv_id for r in rows] == [200]
-    rows, total = await list_library_volumes(
-        db_session, LibraryFilters(format="ongoing")
-    )
+    rows, total = await list_library_volumes(db_session, LibraryFilters(format="ongoing"))
     assert total == 1
     assert [r.cv_id for r in rows] == [100]
 
@@ -1730,9 +1774,7 @@ async def test_library_format_facet_excludes_local_volumes(db_session):
     await _seed_format_library(db_session)
     # A local volume has no classified format — the facet is CV-only.
     await _make_local_volume(db_session, "Local Series", ["1"], sha_offset=300)
-    rows, total = await list_library_volumes(
-        db_session, LibraryFilters(format="ongoing")
-    )
+    rows, total = await list_library_volumes(db_session, LibraryFilters(format="ongoing"))
     assert total == 1
     assert all(r.kind == "cv" for r in rows)
     assert [r.cv_id for r in rows] == [100]
@@ -1744,9 +1786,7 @@ async def test_library_format_facet_excludes_local_volumes(db_session):
 async def _finish_issue_1001(db_session, user_id) -> None:
     """Mark the file matched to Saga #1 (issue 1001) finished for a user."""
     file_id = (
-        await db_session.execute(
-            select(FileMatch.file_id).where(FileMatch.issue_cv_id == 1001)
-        )
+        await db_session.execute(select(FileMatch.file_id).where(FileMatch.issue_cv_id == 1001))
     ).scalar_one()
     db_session.add(
         ReadProgress(
@@ -1836,15 +1876,12 @@ async def test_get_character_detail_appearances(db_session):
     db_session.add_all(
         [
             _char_volume(500, 200, "X-Men (gallery)", position=0),
-            _char_volume(500, 100, "Saga (gallery)", cover_url="https://x/s.jpg",
-                         position=1),
+            _char_volume(500, 100, "Saga (gallery)", cover_url="https://x/s.jpg", position=1),
         ]
     )
     await db_session.commit()
 
-    detail = await get_character_detail(
-        db_session, _StubCharacterCache(character), 500
-    )
+    detail = await get_character_detail(db_session, _StubCharacterCache(character), 500)
     assert detail is not None
     assert detail.name == "Alana"
     # The completeness ring counts issue appearances from issue_credits:
@@ -1882,9 +1919,7 @@ async def test_get_character_detail_volumes_scraping(db_session):
     db_session.add(character)
     await db_session.commit()
 
-    detail = await get_character_detail(
-        db_session, _StubCharacterCache(character), 504
-    )
+    detail = await get_character_detail(db_session, _StubCharacterCache(character), 504)
     assert detail.volumes_scraping is True
     assert detail.appearance_volumes == []
     assert detail.appearance_volumes_total == 0
@@ -1929,7 +1964,9 @@ async def test_get_character_detail_info(db_session):
                 {"id": 701, "name": "George Pérez"},
             ],
             "first_appeared_in_issue": {
-                "id": 9001, "name": "Turbulence", "issue_number": "8",
+                "id": 9001,
+                "name": "Turbulence",
+                "issue_number": "8",
             },
             "issues_died_in": [
                 {"id": 2001, "name": "Final Battle", "issue_number": "1"},
@@ -1946,9 +1983,7 @@ async def test_get_character_detail_info(db_session):
     db_session.add(character)
     await db_session.commit()
 
-    detail = await get_character_detail(
-        db_session, _StubCharacterCache(character), 510
-    )
+    detail = await get_character_detail(db_session, _StubCharacterCache(character), 510)
     info = detail.info
     assert info.real_name == "Delroy Garrett, Jr."
     # Aliases split from the newline string, trimmed and de-duped.
@@ -1984,7 +2019,8 @@ async def test_get_character_detail_friends(db_session):
                 cv_id=601,
                 name="Iron Man",
                 raw_payload={
-                    "id": 601, "name": "Iron Man",
+                    "id": 601,
+                    "name": "Iron Man",
                     "image": {"icon_url": "https://example.com/601.jpg"},
                 },
                 fetched_at=datetime.now(tz=UTC),
@@ -1993,7 +2029,8 @@ async def test_get_character_detail_friends(db_session):
                 cv_id=602,
                 name="Thor",
                 raw_payload={
-                    "id": 602, "name": "Thor",
+                    "id": 602,
+                    "name": "Thor",
                     "image": {"icon_url": "https://example.com/602.jpg"},
                 },
                 fetched_at=datetime.now(tz=UTC),
@@ -2021,9 +2058,7 @@ async def test_get_character_detail_friends(db_session):
     cache = _StubCharacterCache(character)
 
     # Page 1, 2 per page: 4 unique friends -> 2 pages.
-    p1 = await get_character_detail(
-        db_session, cache, 530, friends_page=1, page_size=2
-    )
+    p1 = await get_character_detail(db_session, cache, 530, friends_page=1, page_size=2)
     assert p1.friends_total == 4  # the duplicate 601 collapsed
     assert p1.friends_page == 1 and p1.friends_page_count == 2
     assert [f.cv_id for f in p1.friends] == [601, 602]
@@ -2032,18 +2067,14 @@ async def test_get_character_detail_friends(db_session):
     assert p1.friends[0].icon_url == "https://example.com/601.jpg"
 
     # Page 2 -> the uncached friends: no avatar, not hydrated.
-    p2 = await get_character_detail(
-        db_session, cache, 530, friends_page=2, page_size=2
-    )
+    p2 = await get_character_detail(db_session, cache, 530, friends_page=2, page_size=2)
     assert [f.cv_id for f in p2.friends] == [603, 604]
     assert not any(f.is_hydrated for f in p2.friends)
     assert p2.friends[0].icon_url is None
     assert p2.friends[0].name == "Hawkeye"
 
     # An out-of-range friends page clamps to the last.
-    p9 = await get_character_detail(
-        db_session, cache, 530, friends_page=9, page_size=2
-    )
+    p9 = await get_character_detail(db_session, cache, 530, friends_page=9, page_size=2)
     assert p9.friends_page == 2
 
 
@@ -2057,9 +2088,7 @@ async def test_get_character_detail_no_friends(db_session):
     )
     db_session.add(character)
     await db_session.commit()
-    detail = await get_character_detail(
-        db_session, _StubCharacterCache(character), 531
-    )
+    detail = await get_character_detail(db_session, _StubCharacterCache(character), 531)
     assert detail.friends_total == 0
     assert detail.friends == []
     assert detail.friends_page_count == 1
@@ -2074,7 +2103,8 @@ async def test_get_character_detail_enemies(db_session):
             cv_id=611,
             name="Red Skull",
             raw_payload={
-                "id": 611, "name": "Red Skull",
+                "id": 611,
+                "name": "Red Skull",
                 "image": {"icon_url": "https://example.com/611.jpg"},
             },
             fetched_at=datetime.now(tz=UTC),
@@ -2099,9 +2129,7 @@ async def test_get_character_detail_enemies(db_session):
     cache = _StubCharacterCache(character)
 
     # 3 enemies, 2 per page -> 2 pages.
-    p1 = await get_character_detail(
-        db_session, cache, 540, enemies_page=1, page_size=2
-    )
+    p1 = await get_character_detail(db_session, cache, 540, enemies_page=1, page_size=2)
     assert p1.enemies_total == 3
     assert p1.enemies_page == 1 and p1.enemies_page_count == 2
     assert [e.cv_id for e in p1.enemies] == [611, 612]
@@ -2110,9 +2138,7 @@ async def test_get_character_detail_enemies(db_session):
     assert p1.enemies[0].icon_url == "https://example.com/611.jpg"
     assert p1.enemies[1].is_hydrated is False
 
-    p2 = await get_character_detail(
-        db_session, cache, 540, enemies_page=2, page_size=2
-    )
+    p2 = await get_character_detail(db_session, cache, 540, enemies_page=2, page_size=2)
     assert [e.cv_id for e in p2.enemies] == [613]
     assert p2.enemies_page == 2
     # The friends and enemies pagers are independent.
@@ -2128,7 +2154,8 @@ async def test_get_character_detail_teams(db_session):
             cv_id=801,
             name="Avengers",
             raw_payload={
-                "id": 801, "name": "Avengers",
+                "id": 801,
+                "name": "Avengers",
                 "image": {"icon_url": "https://example.com/801.jpg"},
             },
             fetched_at=datetime.now(tz=UTC),
@@ -2152,9 +2179,7 @@ async def test_get_character_detail_teams(db_session):
     await db_session.commit()
     cache = _StubCharacterCache(character)
 
-    p1 = await get_character_detail(
-        db_session, cache, 550, teams_page=1, page_size=2
-    )
+    p1 = await get_character_detail(db_session, cache, 550, teams_page=1, page_size=2)
     assert p1.teams_total == 3
     assert p1.teams_page == 1 and p1.teams_page_count == 2
     assert [t.cv_id for t in p1.teams] == [801, 802]
@@ -2163,9 +2188,7 @@ async def test_get_character_detail_teams(db_session):
     assert p1.teams[0].icon_url == "https://example.com/801.jpg"
     assert p1.teams[1].is_hydrated is False
 
-    p2 = await get_character_detail(
-        db_session, cache, 550, teams_page=2, page_size=2
-    )
+    p2 = await get_character_detail(db_session, cache, 550, teams_page=2, page_size=2)
     assert [t.cv_id for t in p2.teams] == [803]
 
 
@@ -2187,7 +2210,8 @@ async def test_get_team_detail(db_session):
             cv_id=901,
             name="Iron Man",
             raw_payload={
-                "id": 901, "name": "Iron Man",
+                "id": 901,
+                "name": "Iron Man",
                 "image": {"icon_url": "https://example.com/901.jpg"},
             },
             fetched_at=datetime.now(tz=UTC),
@@ -2218,7 +2242,8 @@ async def test_get_team_detail(db_session):
             cv_id=7100,
             name="Secret Invasion",
             raw_payload={
-                "id": 7100, "name": "Secret Invasion",
+                "id": 7100,
+                "name": "Secret Invasion",
                 "image": {"icon_url": "https://example.com/7100.jpg"},
             },
             fetched_at=datetime.now(tz=UTC),
@@ -2239,7 +2264,9 @@ async def test_get_team_detail(db_session):
             # CV gives aliases as one newline-separated string.
             "aliases": "The Mighty Avengers\nEarth's Mightiest\nThe Mighty Avengers",
             "first_appeared_in_issue": {
-                "id": 9100, "name": "Avengers", "issue_number": "1",
+                "id": 9100,
+                "name": "Avengers",
+                "issue_number": "1",
             },
             "issues_disbanded_in": [
                 {"id": 9200, "name": "Disassembled", "issue_number": "503"},
@@ -2275,9 +2302,7 @@ async def test_get_team_detail(db_session):
     db_session.add(team)
     await db_session.commit()
 
-    detail = await get_team_detail(
-        db_session, _StubTeamCache(team), 850, page=1, page_size=2
-    )
+    detail = await get_team_detail(db_session, _StubTeamCache(team), 850, page=1, page_size=2)
     assert detail is not None
     assert detail.name == "Avengers"
     assert detail.deck == "Earth's Mightiest Heroes."
@@ -2339,21 +2364,27 @@ async def test_get_team_detail(db_session):
     assert detail.story_arcs[1].cv_id == 7100
     assert detail.story_arcs[1].is_hydrated is True
 
-    d2 = await get_team_detail(
-        db_session, _StubTeamCache(team), 850, page=2, page_size=2
-    )
+    d2 = await get_team_detail(db_session, _StubTeamCache(team), 850, page=2, page_size=2)
     assert [m.cv_id for m in d2.members] == [903]
 
     # The friends pager is independent of the members pager.
     d3 = await get_team_detail(
-        db_session, _StubTeamCache(team), 850, page=1, page_size=2,
+        db_session,
+        _StubTeamCache(team),
+        850,
+        page=1,
+        page_size=2,
         friends_page=2,
     )
     assert [f.cv_id for f in d3.friends] == [951]
 
     # The volumes alphabet-bar filter narrows by the volume's name.
     dv = await get_team_detail(
-        db_session, _StubTeamCache(team), 850, page=1, page_size=2,
+        db_session,
+        _StubTeamCache(team),
+        850,
+        page=1,
+        page_size=2,
         volumes_letter="W",
     )
     assert dv.volumes_total == 3 and dv.volumes_filtered_count == 1
@@ -2361,7 +2392,11 @@ async def test_get_team_detail(db_session):
 
     # The story-arc alphabet filter narrows by the cleaned arc name.
     da = await get_team_detail(
-        db_session, _StubTeamCache(team), 850, page=1, page_size=2,
+        db_session,
+        _StubTeamCache(team),
+        850,
+        page=1,
+        page_size=2,
         arcs_letter="S",
     )
     assert da.story_arcs_total == 2 and da.story_arcs_filtered_count == 1
@@ -2399,7 +2434,8 @@ async def test_get_creator_detail(db_session):
                 cv_id=601,
                 name="Yorick Brown",
                 raw_payload={
-                    "id": 601, "name": "Yorick Brown",
+                    "id": 601,
+                    "name": "Yorick Brown",
                     "image": {"icon_url": "https://example.com/601.jpg"},
                 },
                 fetched_at=datetime.now(tz=UTC),
@@ -2408,7 +2444,8 @@ async def test_get_creator_detail(db_session):
                 cv_id=7001,
                 name="The Cure",
                 raw_payload={
-                    "id": 7001, "name": "The Cure",
+                    "id": 7001,
+                    "name": "The Cure",
                     "image": {"icon_url": "https://example.com/7001.jpg"},
                 },
                 fetched_at=datetime.now(tz=UTC),
@@ -2525,9 +2562,7 @@ async def test_get_character_detail_pagination(db_session):
     character = CvCharacter(
         cv_id=501,
         name="Marko",
-        raw_payload={
-            "id": 501, "name": "Marko", "issue_credits": [{"id": 1001}]
-        },
+        raw_payload={"id": 501, "name": "Marko", "issue_credits": [{"id": 1001}]},
         fetched_at=datetime.now(tz=UTC),
         volumes_scraped_at=datetime.now(tz=UTC),
     )
@@ -2578,9 +2613,7 @@ async def test_get_character_detail_sorts_by_volume(db_session):
     )
     await db_session.commit()
 
-    detail = await get_character_detail(
-        db_session, _StubCharacterCache(character), 503
-    )
+    detail = await get_character_detail(db_session, _StubCharacterCache(character), 503)
     assert [v.name for v in detail.appearance_volumes] == ["Saga", "X-Men"]
 
 
@@ -2717,13 +2750,17 @@ async def test_list_volume_supplements(db_session):
     await db_session.commit()
     for f, vol in ((files[0], 100), (files[1], 100), (files[2], 200)):
         await attach_supplement(
-            db_session, file_id=f.id, volume_cv_id=vol,
-            supplement_type="cover_gallery", attached_by=None,
+            db_session,
+            file_id=f.id,
+            volume_cv_id=vol,
+            supplement_type="cover_gallery",
+            attached_by=None,
         )
 
     sups = await list_volume_supplements(db_session, 100)
     assert {s.filename for s in sups} == {
-        "saga-covers.cbz", "saga-sketches.cbz",
+        "saga-covers.cbz",
+        "saga-sketches.cbz",
     }
     assert all(s.supplement_type == "cover_gallery" for s in sups)
     assert all(s.type_label == "Cover gallery" for s in sups)
@@ -2744,8 +2781,11 @@ async def test_get_volume_detail_surfaces_supplements(db_session):
     db_session.add(_bare_match(f.id))
     await db_session.commit()
     await attach_supplement(
-        db_session, file_id=f.id, volume_cv_id=100,
-        supplement_type="cover_gallery", attached_by=None,
+        db_session,
+        file_id=f.id,
+        volume_cv_id=100,
+        supplement_type="cover_gallery",
+        attached_by=None,
     )
 
     detail = await get_volume_detail(db_session, 100)
@@ -2796,7 +2836,10 @@ async def test_attach_local_group_happy_path(db_session):
     off the target volume, no conflicts."""
     # Existing local volume: a single, non-colliding issue.
     lv, _existing = await _make_local_volume(
-        db_session, "My Indie Series", ["100"], sha_offset=900,
+        db_session,
+        "My Indie Series",
+        ["100"],
+        sha_offset=900,
     )
     # The pending group — three files, none of whose numbers clash.
     files = []
@@ -2814,10 +2857,7 @@ async def test_attach_local_group_happy_path(db_session):
         db_session,
         series_key="My Indie Series",
         target_volume_id=lv.id,
-        file_issue_numbers={
-            str(f.id): str(n)
-            for f, n in zip(files, [1, 2, 3], strict=True)
-        },
+        file_issue_numbers={str(f.id): str(n) for f, n in zip(files, [1, 2, 3], strict=True)},
         file_issue_names={},
         created_by=None,
     )
@@ -2840,12 +2880,14 @@ async def test_attach_local_group_happy_path(db_session):
 
     # The target volume now has 4 issues (1 existing + 3 new).
     rows = (
-        await db_session.execute(
-            select(LocalIssue.issue_number).where(
-                LocalIssue.local_volume_id == lv.id
+        (
+            await db_session.execute(
+                select(LocalIssue.issue_number).where(LocalIssue.local_volume_id == lv.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert sorted(rows) == ["1", "100", "2", "3"]
 
 
@@ -2853,13 +2895,20 @@ async def test_attach_local_group_conflict_with_existing_issue(db_session):
     """A submitted issue number already on the target volume → soft
     failure: no writes, conflicts list points at the offending file."""
     lv, _existing = await _make_local_volume(
-        db_session, "My Indie Series", ["1"], sha_offset=900,
+        db_session,
+        "My Indie Series",
+        ["1"],
+        sha_offset=900,
     )
     f_ok = await _pending_file(
-        db_session, f"{710:064x}", filename="My Indie Series 002.cbz",
+        db_session,
+        f"{710:064x}",
+        filename="My Indie Series 002.cbz",
     )
     f_conflict = await _pending_file(
-        db_session, f"{711:064x}", filename="My Indie Series 001.cbz",
+        db_session,
+        f"{711:064x}",
+        filename="My Indie Series 001.cbz",
     )
     await db_session.commit()
 
@@ -2898,10 +2947,15 @@ async def test_attach_local_group_conflict_is_case_insensitive(db_session):
     one — the file would otherwise sail through validation and create a
     second 'issue 1' row that looks identical to the user."""
     lv, _existing = await _make_local_volume(
-        db_session, "My Indie Series", ["1 "], sha_offset=900,
+        db_session,
+        "My Indie Series",
+        ["1 "],
+        sha_offset=900,
     )
     f = await _pending_file(
-        db_session, f"{720:064x}", filename="My Indie Series 001.cbz",
+        db_session,
+        f"{720:064x}",
+        filename="My Indie Series 001.cbz",
     )
     await db_session.commit()
 
@@ -2924,13 +2978,20 @@ async def test_attach_local_group_duplicate_within_batch(db_session):
     is flagged as ``duplicate`` (the first is left alone; only one of
     the pair is the 'conflict' to fix). No writes happen."""
     lv, _existing = await _make_local_volume(
-        db_session, "My Indie Series", [], sha_offset=900,
+        db_session,
+        "My Indie Series",
+        [],
+        sha_offset=900,
     )
     f1 = await _pending_file(
-        db_session, f"{730:064x}", filename="My Indie Series 001.cbz",
+        db_session,
+        f"{730:064x}",
+        filename="My Indie Series 001.cbz",
     )
     f2 = await _pending_file(
-        db_session, f"{731:064x}", filename="My Indie Series 001b.cbz",
+        db_session,
+        f"{731:064x}",
+        filename="My Indie Series 001b.cbz",
     )
     await db_session.commit()
 
@@ -2961,7 +3022,10 @@ async def test_attach_local_group_unnumbered_issues_dont_collide(db_session):
     number for each row falls through to ``""``, which the conflict
     check skips entirely."""
     lv, _existing = await _make_local_volume(
-        db_session, "My Indie Series", [], sha_offset=900,
+        db_session,
+        "My Indie Series",
+        [],
+        sha_offset=900,
     )
     # Add an explicitly-NULL existing issue too, to be thorough.
     db_session.add(_local_issue(lv.id, issue_number=None))
@@ -2970,10 +3034,14 @@ async def test_attach_local_group_unnumbered_issues_dont_collide(db_session):
     # exercising is the *submitted* numbers being blank, not the parsed
     # ones.
     f1 = await _pending_file(
-        db_session, f"{740:064x}", filename="My Indie Series 005.cbz",
+        db_session,
+        f"{740:064x}",
+        filename="My Indie Series 005.cbz",
     )
     f2 = await _pending_file(
-        db_session, f"{741:064x}", filename="My Indie Series 006.cbz",
+        db_session,
+        f"{741:064x}",
+        filename="My Indie Series 006.cbz",
     )
     await db_session.commit()
 
@@ -2996,7 +3064,10 @@ async def test_attach_local_group_drained_group_returns_none(db_session):
     another tab / never existed) is a hard failure: None, not an empty
     success result."""
     lv, _existing = await _make_local_volume(
-        db_session, "My Indie Series", ["1"], sha_offset=900,
+        db_session,
+        "My Indie Series",
+        ["1"],
+        sha_offset=900,
     )
     outcome = await attach_local_group(
         db_session,
@@ -3039,7 +3110,11 @@ async def test_attach_local_group_missing_target_volume_returns_none(db_session)
 
 
 async def _pending_in_series(
-    db_session, *, series_filename_prefix: str, count: int, confidence_seed: int,
+    db_session,
+    *,
+    series_filename_prefix: str,
+    count: int,
+    confidence_seed: int,
     sha_offset: int,
 ):
     """Build ``count`` PENDING files whose filenames parse to the same
@@ -3056,9 +3131,7 @@ async def _pending_in_series(
     for i, f in enumerate(files):
         # Stepped issue numbers so the parser pulls the same series
         # name (the prefix) for every file.
-        db_session.add(
-            _location(f.id, f"/library/{series_filename_prefix} {i + 1:03d}.cbz")
-        )
+        db_session.add(_location(f.id, f"/library/{series_filename_prefix} {i + 1:03d}.cbz"))
         # Decreasing confidence so files within the series span the
         # full PENDING band. Without this, a cap-based naive grouping
         # would just slice the lot off cleanly; we want a *mix* of
@@ -3077,17 +3150,13 @@ async def _pending_in_series(
     return files
 
 
-async def test_list_pending_groups_keeps_a_big_group_atomic(
-    db_session, monkeypatch
-):
+async def test_list_pending_groups_keeps_a_big_group_atomic(db_session, monkeypatch):
     """A series whose file count is larger than the row cap should
     still appear as ONE atomic group (every member enriched and
     visible), not chopped in half by the cap boundary. The pre-fix
     code split such a group; this test pins the new behaviour."""
     # Squeeze the cap so a realistic test setup can blow past it.
-    monkeypatch.setattr(
-        "app.services.review.PENDING_GROUP_ROW_CAP", 5
-    )
+    monkeypatch.setattr("app.services.review.PENDING_GROUP_ROW_CAP", 5)
 
     # One big series (8 files) + a few small ones. Total 11 > cap=5.
     await _pending_in_series(
@@ -3121,30 +3190,35 @@ async def test_list_pending_groups_keeps_a_big_group_atomic(
     assert total == 8
 
 
-async def test_list_pending_groups_includes_groups_until_cap_then_stops(
-    db_session, monkeypatch
-):
+async def test_list_pending_groups_includes_groups_until_cap_then_stops(db_session, monkeypatch):
     """When several small-to-medium groups fit before the cap, every
     one of them comes in whole; the first group that *would* cross
     the cap stops the picker, and any remaining groups are reported
     via ``hit_row_cap``."""
-    monkeypatch.setattr(
-        "app.services.review.PENDING_GROUP_ROW_CAP", 8
-    )
+    monkeypatch.setattr("app.services.review.PENDING_GROUP_ROW_CAP", 8)
 
     # Three groups of 3 each — first two fit (3+3=6 ≤ 8), third would
     # push to 9 and is dropped whole.
     await _pending_in_series(
-        db_session, series_filename_prefix="Alpha",
-        count=3, confidence_seed=0, sha_offset=2200,
+        db_session,
+        series_filename_prefix="Alpha",
+        count=3,
+        confidence_seed=0,
+        sha_offset=2200,
     )
     await _pending_in_series(
-        db_session, series_filename_prefix="Beta",
-        count=3, confidence_seed=10, sha_offset=2300,
+        db_session,
+        series_filename_prefix="Beta",
+        count=3,
+        confidence_seed=10,
+        sha_offset=2300,
     )
     await _pending_in_series(
-        db_session, series_filename_prefix="Gamma",
-        count=3, confidence_seed=20, sha_offset=2400,
+        db_session,
+        series_filename_prefix="Gamma",
+        count=3,
+        confidence_seed=20,
+        sha_offset=2400,
     )
     await db_session.commit()
 
@@ -3163,17 +3237,16 @@ async def test_list_pending_groups_includes_groups_until_cap_then_stops(
     assert hit_cap is True
 
 
-async def test_list_pending_groups_no_cap_hit_when_everything_fits(
-    db_session, monkeypatch
-):
+async def test_list_pending_groups_no_cap_hit_when_everything_fits(db_session, monkeypatch):
     """``hit_row_cap`` only fires when groups got dropped. If every
     pending file fits, the flag stays False even with a tight cap."""
-    monkeypatch.setattr(
-        "app.services.review.PENDING_GROUP_ROW_CAP", 50
-    )
+    monkeypatch.setattr("app.services.review.PENDING_GROUP_ROW_CAP", 50)
     await _pending_in_series(
-        db_session, series_filename_prefix="Alpha",
-        count=2, confidence_seed=0, sha_offset=2500,
+        db_session,
+        series_filename_prefix="Alpha",
+        count=2,
+        confidence_seed=0,
+        sha_offset=2500,
     )
     await db_session.commit()
 
@@ -3183,29 +3256,31 @@ async def test_list_pending_groups_no_cap_hit_when_everything_fits(
     assert hit_cap is False
 
 
-async def test_get_group_reference_bypasses_the_row_cap(
-    db_session, monkeypatch
-):
+async def test_get_group_reference_bypasses_the_row_cap(db_session, monkeypatch):
     """A reviewer landing on the volume-search reference card for a
     big series must see the full count, not the cap-truncated count.
     This is the single-group counterpart of the queue's group-
     atomicity guarantee — single-group fetches never cap."""
-    monkeypatch.setattr(
-        "app.services.review.PENDING_GROUP_ROW_CAP", 3
-    )
+    monkeypatch.setattr("app.services.review.PENDING_GROUP_ROW_CAP", 3)
 
     # Big series: 10 files. List view would drop most; single-group
     # view should return every one of them.
     await _pending_in_series(
-        db_session, series_filename_prefix="Big Series",
-        count=10, confidence_seed=0, sha_offset=2600,
+        db_session,
+        series_filename_prefix="Big Series",
+        count=10,
+        confidence_seed=0,
+        sha_offset=2600,
     )
     # An unrelated, also-big series in the background — proves the
     # single-group fetch isn't accidentally including other groups'
     # files in the count.
     await _pending_in_series(
-        db_session, series_filename_prefix="Other Series",
-        count=10, confidence_seed=20, sha_offset=2700,
+        db_session,
+        series_filename_prefix="Other Series",
+        count=10,
+        confidence_seed=20,
+        sha_offset=2700,
     )
     await db_session.commit()
 
@@ -3215,20 +3290,19 @@ async def test_get_group_reference_bypasses_the_row_cap(
     assert ref.file_count == 10
 
 
-async def test_preview_local_group_bypasses_the_row_cap(
-    db_session, monkeypatch
-):
+async def test_preview_local_group_bypasses_the_row_cap(db_session, monkeypatch):
     """The bulk-create-from-group page must list every file in the
     series, not just the cap-survivors. Otherwise the reviewer would
     create a local volume that's missing issues, and the matcher's
     next pass would silently leave them behind."""
-    monkeypatch.setattr(
-        "app.services.review.PENDING_GROUP_ROW_CAP", 3
-    )
+    monkeypatch.setattr("app.services.review.PENDING_GROUP_ROW_CAP", 3)
 
     await _pending_in_series(
-        db_session, series_filename_prefix="Indie",
-        count=7, confidence_seed=0, sha_offset=2800,
+        db_session,
+        series_filename_prefix="Indie",
+        count=7,
+        confidence_seed=0,
+        sha_offset=2800,
     )
     await db_session.commit()
 
@@ -3341,9 +3415,7 @@ async def test_exclude_files_by_series_flips_every_reviewable_file(db_session):
         )
     await db_session.commit()
 
-    flipped = await exclude_files_by_series(
-        db_session, series_key="Some Indie Series"
-    )
+    flipped = await exclude_files_by_series(db_session, series_key="Some Indie Series")
     assert flipped == 3
     for f in files:
         await db_session.refresh(f)
@@ -3357,10 +3429,14 @@ async def test_exclude_files_by_series_leaves_resolved_files_untouched(db_sessio
     (it also operates on reviewable files only)."""
     # Two pending files in 'Mixed Series' — these get excluded.
     pending_a = await _pending_file(
-        db_session, f"{820:064x}", filename="Mixed Series 001.cbz",
+        db_session,
+        f"{820:064x}",
+        filename="Mixed Series 001.cbz",
     )
     pending_b = await _pending_file(
-        db_session, f"{821:064x}", filename="Mixed Series 002.cbz",
+        db_session,
+        f"{821:064x}",
+        filename="Mixed Series 002.cbz",
     )
     # One AUTO-resolved file in the same parsed series — left alone.
     resolved = _file(f"{822:064x}")
@@ -3379,9 +3455,7 @@ async def test_exclude_files_by_series_leaves_resolved_files_untouched(db_sessio
     )
     await db_session.commit()
 
-    flipped = await exclude_files_by_series(
-        db_session, series_key="Mixed Series"
-    )
+    flipped = await exclude_files_by_series(db_session, series_key="Mixed Series")
     assert flipped == 2
     for f in (pending_a, pending_b):
         await db_session.refresh(f)
@@ -3394,7 +3468,8 @@ async def test_exclude_files_by_series_unknown_series_returns_zero(db_session):
     """No matching group → no rows flipped, returns 0. Belt-and-
     suspenders against a stale series key reaching the route."""
     flipped = await exclude_files_by_series(
-        db_session, series_key="Nonexistent Series",
+        db_session,
+        series_key="Nonexistent Series",
     )
     assert flipped == 0
 
@@ -3413,7 +3488,9 @@ async def test_exclude_drops_group_from_review_queue(db_session):
             filename=f"Excluded Series {n:03d}.cbz",
         )
     await _pending_file(
-        db_session, f"{840:064x}", filename="Kept Series 001.cbz",
+        db_session,
+        f"{840:064x}",
+        filename="Kept Series 001.cbz",
     )
     await db_session.commit()
 
@@ -3424,9 +3501,7 @@ async def test_exclude_drops_group_from_review_queue(db_session):
     assert "Kept Series" in keys
 
     # Excluding the first series drops it from the next render.
-    flipped = await exclude_files_by_series(
-        db_session, series_key="Excluded Series"
-    )
+    flipped = await exclude_files_by_series(db_session, series_key="Excluded Series")
     assert flipped == 3
     groups, _total, _capped = await list_pending_groups(db_session)
     keys = sorted(g.series_key or "" for g in groups)

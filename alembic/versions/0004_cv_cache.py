@@ -52,9 +52,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_cv_volumes_name", "cv_volumes", ["name"])
     op.create_index("ix_cv_volumes_year", "cv_volumes", ["year"])
-    op.create_index(
-        "ix_cv_volumes_publisher_cv_id", "cv_volumes", ["publisher_cv_id"]
-    )
+    op.create_index("ix_cv_volumes_publisher_cv_id", "cv_volumes", ["publisher_cv_id"])
 
     # Issues (raw_payload / fetched_at nullable: stub rows allowed)
     op.create_table(
@@ -97,9 +95,7 @@ def downgrade() -> None:
     for name in ("cv_teams", "cv_story_arcs", "cv_characters", "cv_persons"):
         op.drop_table(name)
     op.drop_index("ix_cv_issues_cover_date", table_name="cv_issues")
-    op.drop_index(
-        "ix_cv_issues_volume_cv_id_issue_number", table_name="cv_issues"
-    )
+    op.drop_index("ix_cv_issues_volume_cv_id_issue_number", table_name="cv_issues")
     op.drop_table("cv_issues")
     op.drop_index("ix_cv_volumes_publisher_cv_id", table_name="cv_volumes")
     op.drop_index("ix_cv_volumes_year", table_name="cv_volumes")

@@ -46,9 +46,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("page", sa.Integer(), server_default="0", nullable=False),
-        sa.Column(
-            "page_count", sa.Integer(), server_default="0", nullable=False
-        ),
+        sa.Column("page_count", sa.Integer(), server_default="0", nullable=False),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "updated_at",

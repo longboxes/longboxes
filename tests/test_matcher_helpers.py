@@ -17,10 +17,10 @@ def test_looks_like_year_accepts_publication_years():
     1930 onward is plausibly a publication year."""
     from app.matcher.pipeline import _looks_like_year
 
-    assert _looks_like_year(1940) is True   # Detective Comics era
-    assert _looks_like_year(2011) is True   # New 52
-    assert _looks_like_year(2025) is True   # current
-    assert _looks_like_year(1930) is True   # boundary
+    assert _looks_like_year(1940) is True  # Detective Comics era
+    assert _looks_like_year(2011) is True  # New 52
+    assert _looks_like_year(2025) is True  # current
+    assert _looks_like_year(1930) is True  # boundary
 
 
 def test_looks_like_year_rejects_sequence_numbers():
@@ -32,9 +32,9 @@ def test_looks_like_year_rejects_sequence_numbers():
 
     assert _looks_like_year(None) is False
     assert _looks_like_year(0) is False
-    assert _looks_like_year(1) is False    # v1
-    assert _looks_like_year(2) is False    # v2
-    assert _looks_like_year(50) is False   # v50
+    assert _looks_like_year(1) is False  # v1
+    assert _looks_like_year(2) is False  # v2
+    assert _looks_like_year(50) is False  # v50
     assert _looks_like_year(1929) is False  # just below the floor
 
 
@@ -61,7 +61,10 @@ def test_prelim_sort_key_year_proximity_tiebreaks_same_name_candidates():
 
     # 2011 (delta=1) → 2016 (4) → 1989 (23) → 1940 (72).
     assert [c[0]["start_year"] for c in candidates] == [
-        "2011", "2016", "1989", "1940",
+        "2011",
+        "2016",
+        "1989",
+        "1940",
     ]
 
 
@@ -71,7 +74,7 @@ def test_prelim_sort_key_year_beats_prelim_score_within_band():
     from app.matcher.pipeline import _prelim_sort_key
 
     candidates = [
-        ({"name": "Batman", "start_year": "1940"}, 1.0),   # exact name, far year
+        ({"name": "Batman", "start_year": "1940"}, 1.0),  # exact name, far year
         ({"name": "Batman Adventures", "start_year": "2012"}, 0.75),  # partial name, perfect year
     ]
     candidates.sort(key=lambda x: _prelim_sort_key(x, 2012))
@@ -191,8 +194,9 @@ def test_prelim_score_year_suffix_doesnt_crater_strict_half():
 # ---- _score: year delta uses issue cover_date too ---------------------
 
 
-def _score_with(*, volume_year, cover_date_year, parsed_year,
-                volume_name="Batman", parsed_series="Batman"):
+def _score_with(
+    *, volume_year, cover_date_year, parsed_year, volume_name="Batman", parsed_series="Batman"
+):
     """Convenience: call ``_score`` against SimpleNamespace stand-ins
     so we can dial in the year fields without setting up real ORM rows.
     Returns the resulting confidence."""
@@ -219,7 +223,7 @@ def _score_with(*, volume_year, cover_date_year, parsed_year,
         parsed_series=parsed_series,
         parsed_issue_number="8",
         parsed_year=parsed_year,
-        file_format="unknown",   # skip the format penalty for this test
+        file_format="unknown",  # skip the format penalty for this test
     )
 
 

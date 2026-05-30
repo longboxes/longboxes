@@ -149,9 +149,7 @@ async def setup_submit(
     # discovery story of "find /admin → scroll to settings" is poor
     # for a first-run. Sending them straight to the key form keeps
     # the install narrative short: create user → paste key → done.
-    response = RedirectResponse(
-        url="/setup/comicvine", status_code=status.HTTP_303_SEE_OTHER
-    )
+    response = RedirectResponse(url="/setup/comicvine", status_code=status.HTTP_303_SEE_OTHER)
     _set_session_cookie(response, session.token)
     return response
 
@@ -180,11 +178,11 @@ async def setup_cv_form(
     if user.role != UserRole.ADMIN:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     if await is_cv_configured(db):
-        return RedirectResponse(
-            url="/admin", status_code=status.HTTP_303_SEE_OTHER
-        )
+        return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
-        request, "setup_comicvine.html", {"user": user},
+        request,
+        "setup_comicvine.html",
+        {"user": user},
     )
 
 
@@ -246,9 +244,7 @@ async def setup_cv_skip(user: RequireUserDep):
     just symmetric and defensive."""
     if user.role != UserRole.ADMIN:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    return RedirectResponse(
-        url="/admin?cv_skipped=1", status_code=status.HTTP_303_SEE_OTHER
-    )
+    return RedirectResponse(url="/admin?cv_skipped=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # ---- /login --------------------------------------------------------------

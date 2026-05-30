@@ -73,6 +73,7 @@ class _ComicInfoParseError(Exception):
     identically. Surfacing it here is only for the inspector page.
     """
 
+
 EnqueueMatchFn = Callable[[uuid.UUID], None]
 
 
@@ -172,7 +173,11 @@ async def scan_all_libraries(
         result.libraries_walked += 1
         async with session_factory() as db:
             await _phase_1_walk_library(
-                db, lib_root, scan_start, result, enqueue_match,
+                db,
+                lib_root,
+                scan_start,
+                result,
+                enqueue_match,
                 archive_backend,
             )
 
@@ -200,7 +205,11 @@ async def _phase_1_walk_library(
         path_str = str(archive_path)
         try:
             await _process_one_file(
-                db, archive_path, scan_start, result, enqueue_match,
+                db,
+                archive_path,
+                scan_start,
+                result,
+                enqueue_match,
                 archive_backend,
             )
         except OSError as e:
@@ -212,14 +221,20 @@ async def _phase_1_walk_library(
             # corrupt archive; the admin sees "couldn't read this
             # path" and the retry button re-checks the same thing.
             await record_error(
-                db, path=path_str, kind=FileErrorKind.ARCHIVE_OPEN, exc=e,
+                db,
+                path=path_str,
+                kind=FileErrorKind.ARCHIVE_OPEN,
+                exc=e,
             )
         except ArchiveError as e:
             # Corrupt / password-protected / unreadable archive. Logged, skipped.
             result.errors += 1
             logger.warning("Archive error on %s: %s", archive_path, e)
             await record_error(
-                db, path=path_str, kind=FileErrorKind.ARCHIVE_OPEN, exc=e,
+                db,
+                path=path_str,
+                kind=FileErrorKind.ARCHIVE_OPEN,
+                exc=e,
             )
         except UnsupportedArchiveError as e:
             # Shouldn't normally happen because the walker filters by extension,
@@ -227,7 +242,10 @@ async def _phase_1_walk_library(
             result.errors += 1
             logger.warning("Unsupported archive %s: %s", archive_path, e)
             await record_error(
-                db, path=path_str, kind=FileErrorKind.ARCHIVE_OPEN, exc=e,
+                db,
+                path=path_str,
+                kind=FileErrorKind.ARCHIVE_OPEN,
+                exc=e,
             )
         else:
             # Clean pass on this path — every kind that *could* have
@@ -239,9 +257,7 @@ async def _phase_1_walk_library(
             await clear_errors_for_path(db, path_str)
 
 
-def _inspect_cover(
-    reader: ArchiveReader, pages: list[str]
-) -> CoverInspection | None:
+def _inspect_cover(reader: ArchiveReader, pages: list[str]) -> CoverInspection | None:
     """Best-effort cover-image inspection for a scanned archive.
 
     Resolves the cover page, extracts it, and reads its geometry so
@@ -274,9 +290,7 @@ def _inspect_cover(
 _INTERIOR_SAMPLE_INDEX = 5
 
 
-def _inspect_interior(
-    reader: ArchiveReader, pages: list[str]
-) -> CoverInspection | None:
+def _inspect_interior(reader: ArchiveReader, pages: list[str]) -> CoverInspection | None:
     """Best-effort interior-page geometry — the duplicates scorer's
     preferred resolution signal.
 
@@ -374,6 +388,7 @@ async def _process_one_file(
             _inspect_cover(reader, pages),
             _inspect_interior(reader, pages),
         )
+
     (
         pages,
         comicinfo_bytes,
@@ -452,15 +467,9 @@ async def _process_one_file(
             first_scanned_at=scan_start,
             cover_width=cover_inspection.width if cover_inspection else None,
             cover_height=cover_inspection.height if cover_inspection else None,
-            cover_is_wraparound=(
-                cover_inspection.is_wraparound if cover_inspection else None
-            ),
-            interior_width=(
-                interior_inspection.width if interior_inspection else None
-            ),
-            interior_height=(
-                interior_inspection.height if interior_inspection else None
-            ),
+            cover_is_wraparound=(cover_inspection.is_wraparound if cover_inspection else None),
+            interior_width=(interior_inspection.width if interior_inspection else None),
+            interior_height=(interior_inspection.height if interior_inspection else None),
         )
         db.add(file_row)
         await db.flush()  # need file_row.id for the location
@@ -641,9 +650,7 @@ async def _phase_2_reconcile(
 # ---- Small helpers ------------------------------------------------------
 
 
-async def _get_location_by_path(
-    db: AsyncSession, path: str
-) -> FileLocation | None:
+async def _get_location_by_path(db: AsyncSession, path: str) -> FileLocation | None:
     result = await db.execute(select(FileLocation).where(FileLocation.path == path))
     return result.scalar_one_or_none()
 

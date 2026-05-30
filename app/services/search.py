@@ -236,7 +236,11 @@ def _build_volume_hit(
 
 
 async def _search_volumes(
-    db: AsyncSession, q: str, limit: int, *, include_credits_stubs: bool = True,
+    db: AsyncSession,
+    q: str,
+    limit: int,
+    *,
+    include_credits_stubs: bool = True,
 ) -> list[SearchHit]:
     """CV-backed volumes — hybrid (owned first, then other)."""
 
@@ -257,9 +261,7 @@ async def _search_volumes(
     needle = q
     stmt = (
         select(CvVolume, CvPublisher.name.label("publisher_name"), is_owned)
-        .outerjoin(
-            CvPublisher, CvPublisher.cv_id == CvVolume.publisher_cv_id
-        )
+        .outerjoin(CvPublisher, CvPublisher.cv_id == CvVolume.publisher_cv_id)
         .where(func.lower(CvVolume.name).like(f"%{needle}%"))
         .order_by(
             is_owned.desc(),
@@ -275,10 +277,7 @@ async def _search_volumes(
         # Same predicate ``list_library_volumes`` uses: stub rows from
         # ``_upsert_volume_stub`` carry the ``_stub: True`` marker
         # inside raw_payload until a real fetch overwrites them.
-        is_stub = (
-            isinstance(vol.raw_payload, dict)
-            and vol.raw_payload.get("_stub") is True
-        )
+        is_stub = isinstance(vol.raw_payload, dict) and vol.raw_payload.get("_stub") is True
         payload = vol.raw_payload if isinstance(vol.raw_payload, dict) else {}
         # ``format`` / ``description`` are payload-derived — keep them
         # blank on stubs so the card doesn't claim data we don't have
@@ -301,7 +300,11 @@ async def _search_volumes(
 
 
 async def _search_local_volumes(
-    db: AsyncSession, q: str, limit: int, *, include_credits_stubs: bool = True,
+    db: AsyncSession,
+    q: str,
+    limit: int,
+    *,
+    include_credits_stubs: bool = True,
 ) -> list[SearchHit]:
     """User-authored local volumes — always treated as owned."""
 
@@ -339,7 +342,11 @@ async def _search_local_volumes(
 
 
 async def _search_issues(
-    db: AsyncSession, q: str, limit: int, *, include_credits_stubs: bool = True,
+    db: AsyncSession,
+    q: str,
+    limit: int,
+    *,
+    include_credits_stubs: bool = True,
 ) -> list[SearchHit]:
     """Owned CV issues — issue name match. We restrict to owned (a file
     matches the issue) because the CvIssue table accumulates tens of
@@ -378,9 +385,7 @@ async def _search_issues(
                 kind="issue",
                 name=issue.name or f"#{issue.issue_number or '?'}",
                 subtitle=subtitle,
-                cover_url=cv_image_url(issue.raw_payload, "thumb")
-                if issue.raw_payload
-                else None,
+                cover_url=cv_image_url(issue.raw_payload, "thumb") if issue.raw_payload else None,
                 detail_url=f"/issue/{issue.cv_id}",
                 owned=True,
                 key=str(issue.cv_id),
@@ -443,9 +448,7 @@ async def _credits_stubs(
     exclude_clause = ""
     if exclude_cv_ids:
         ids_csv = ",".join(str(int(i)) for i in exclude_cv_ids)
-        exclude_clause = (
-            f"AND (elem->>'id')::bigint NOT IN ({ids_csv})"
-        )
+        exclude_clause = f"AND (elem->>'id')::bigint NOT IN ({ids_csv})"
 
     sql = text(
         f"""
@@ -570,41 +573,81 @@ async def _entity_search_with_stubs(
 
 
 async def _search_characters(
-    db: AsyncSession, q: str, limit: int, *, include_credits_stubs: bool = True,
+    db: AsyncSession,
+    q: str,
+    limit: int,
+    *,
+    include_credits_stubs: bool = True,
 ) -> list[SearchHit]:
     return await _entity_search_with_stubs(
-        db, CvCharacter, "character", "character_credits", "icon",
-        "/character/", q, limit,
+        db,
+        CvCharacter,
+        "character",
+        "character_credits",
+        "icon",
+        "/character/",
+        q,
+        limit,
         include_credits_stubs=include_credits_stubs,
     )
 
 
 async def _search_creators(
-    db: AsyncSession, q: str, limit: int, *, include_credits_stubs: bool = True,
+    db: AsyncSession,
+    q: str,
+    limit: int,
+    *,
+    include_credits_stubs: bool = True,
 ) -> list[SearchHit]:
     return await _entity_search_with_stubs(
-        db, CvPerson, "creator", "person_credits", "icon",
-        "/creator/", q, limit,
+        db,
+        CvPerson,
+        "creator",
+        "person_credits",
+        "icon",
+        "/creator/",
+        q,
+        limit,
         include_credits_stubs=include_credits_stubs,
     )
 
 
 async def _search_teams(
-    db: AsyncSession, q: str, limit: int, *, include_credits_stubs: bool = True,
+    db: AsyncSession,
+    q: str,
+    limit: int,
+    *,
+    include_credits_stubs: bool = True,
 ) -> list[SearchHit]:
     return await _entity_search_with_stubs(
-        db, CvTeam, "team", "team_credits", "icon",
-        "/team/", q, limit,
+        db,
+        CvTeam,
+        "team",
+        "team_credits",
+        "icon",
+        "/team/",
+        q,
+        limit,
         include_credits_stubs=include_credits_stubs,
     )
 
 
 async def _search_arcs(
-    db: AsyncSession, q: str, limit: int, *, include_credits_stubs: bool = True,
+    db: AsyncSession,
+    q: str,
+    limit: int,
+    *,
+    include_credits_stubs: bool = True,
 ) -> list[SearchHit]:
     return await _entity_search_with_stubs(
-        db, CvStoryArc, "arc", "story_arc_credits", "thumb",
-        "/arc/", q, limit,
+        db,
+        CvStoryArc,
+        "arc",
+        "story_arc_credits",
+        "thumb",
+        "/arc/",
+        q,
+        limit,
         transform_name=_arc_name_transform,
         include_credits_stubs=include_credits_stubs,
     )
@@ -626,9 +669,7 @@ _HYDRATION_ENTITY_SPECS: dict[str, tuple[type, str, str]] = {
 }
 
 
-async def get_hit_for_hydration(
-    db: AsyncSession, kind: str, cv_id: int
-) -> SearchHit | None:
+async def get_hit_for_hydration(db: AsyncSession, kind: str, cv_id: int) -> SearchHit | None:
     """Build a fresh SearchHit for one (kind, cv_id) the polling
     endpoint is checking on. Returns ``None`` if:
 
@@ -647,10 +688,7 @@ async def get_hit_for_hydration(
         vol = await db.get(CvVolume, cv_id)
         if vol is None:
             return None
-        is_stub = (
-            isinstance(vol.raw_payload, dict)
-            and vol.raw_payload.get("_stub") is True
-        )
+        is_stub = isinstance(vol.raw_payload, dict) and vol.raw_payload.get("_stub") is True
         if is_stub:
             return None
         # Owned-ness needs the file_match join again; cheap because
@@ -671,9 +709,7 @@ async def get_hit_for_hydration(
         publisher_row = await db.execute(
             select(CvPublisher.name)
             .select_from(CvVolume)
-            .outerjoin(
-                CvPublisher, CvPublisher.cv_id == CvVolume.publisher_cv_id
-            )
+            .outerjoin(CvPublisher, CvPublisher.cv_id == CvVolume.publisher_cv_id)
             .where(CvVolume.cv_id == cv_id)
         )
         publisher = publisher_row.scalar_one_or_none()
@@ -750,12 +786,12 @@ _CV_SEARCH_RESOURCES = "volume,issue,character,person,team,story_arc"
 # request budget is spent entirely on that drill-down. Mirrors the
 # library kind-filter's tighter query.
 _SECTION_KEY_TO_CV_RESOURCE = {
-    "volumes":    "volume",
-    "issues":     "issue",
+    "volumes": "volume",
+    "issues": "issue",
     "characters": "character",
-    "creators":   "person",
-    "teams":      "team",
-    "arcs":       "story_arc",
+    "creators": "person",
+    "teams": "team",
+    "arcs": "story_arc",
 }
 
 # Map CV's ``resource_type`` string to our SearchHit ``kind``. They
@@ -788,9 +824,7 @@ def _cv_volume_hit(item: dict) -> SearchHit | None:
         except (TypeError, ValueError):
             year = None
     first_issue = item.get("first_issue") or {}
-    first_issue_name = (
-        first_issue.get("name") if isinstance(first_issue, dict) else None
-    )
+    first_issue_name = first_issue.get("name") if isinstance(first_issue, dict) else None
     return _build_volume_hit(
         cv_id=cv_id,
         name=item.get("name"),
@@ -917,17 +951,13 @@ async def cv_search_catalogue(
         # to limit per bucket after partitioning. 100 is CV's per-call
         # cap so we clamp there.
         cv_limit = min(limit_per_kind * len(_RESOURCE_TYPE_TO_KIND), 100)
-    envelope = await cv_cache.search(
-        db, cleaned, resources=resources, limit=cv_limit
-    )
+    envelope = await cv_cache.search(db, cleaned, resources=resources, limit=cv_limit)
     raw = envelope.get("results")
     if not isinstance(raw, list):
         return results
 
     # Partition + cap. Builders return None on bad rows; those skip.
-    buckets: dict[str, list[SearchHit]] = {
-        key: [] for key in _RESOURCE_TYPE_TO_KIND.values()
-    }
+    buckets: dict[str, list[SearchHit]] = {key: [] for key in _RESOURCE_TYPE_TO_KIND.values()}
     for item in raw:
         if not isinstance(item, dict):
             continue
@@ -946,7 +976,10 @@ async def cv_search_catalogue(
             hit = _cv_issue_hit(item)
         elif kind == "arc":
             hit = _cv_simple_hit(
-                item, kind, "/arc/", image_size="thumb",
+                item,
+                kind,
+                "/arc/",
+                image_size="thumb",
                 transform_name=_arc_name_transform,
             )
         elif kind == "creator":
@@ -965,9 +998,7 @@ async def cv_search_catalogue(
         # template render a "View all" link when CV returned more
         # than the visible cap.
         section_key = (
-            "creators" if kind_key == "creator"
-            else "arcs" if kind_key == "arc"
-            else f"{kind_key}s"
+            "creators" if kind_key == "creator" else "arcs" if kind_key == "arc" else f"{kind_key}s"
         )
         if len(hits) > limit_per_kind:
             results.more_available.add(section_key)
@@ -1014,9 +1045,7 @@ async def search_library(
         return results
 
     probe = limit_per_kind + 1
-    kinds = (
-        (only_kind,) if only_kind in SECTION_KEYS else SECTION_KEYS
-    )
+    kinds = (only_kind,) if only_kind in SECTION_KEYS else SECTION_KEYS
     for key in kinds:
         hits = await _KIND_FETCHERS[key](
             db, needle, probe, include_credits_stubs=include_credits_stubs

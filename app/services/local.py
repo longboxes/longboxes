@@ -55,9 +55,7 @@ async def list_local_volumes(db: AsyncSession) -> list[dict]:
     local series), so it's preloaded into the page rather than searched
     server-side. Ordered by name so the picker list reads naturally.
     """
-    rows = (
-        await db.execute(select(LocalVolume).order_by(LocalVolume.name))
-    ).scalars()
+    rows = (await db.execute(select(LocalVolume).order_by(LocalVolume.name))).scalars()
     return [
         {
             "id": str(v.id),
@@ -194,9 +192,7 @@ class LocalGroupPreview:
     files: list[LocalGroupFile]
 
 
-async def preview_local_group(
-    db: AsyncSession, series_key: str | None
-) -> LocalGroupPreview | None:
+async def preview_local_group(db: AsyncSession, series_key: str | None) -> LocalGroupPreview | None:
     """Gather one review-queue series group for the bulk-local form.
 
     Uses the cheap path-only group helper from ``review`` so the
@@ -212,15 +208,9 @@ async def preview_local_group(
 
     # Suggested volume year: an explicit ``Volume YYYY`` tag if any file
     # carried one, else the earliest issue cover year in the group.
-    vol_years = [
-        f.parsed_volume_year for f in bucket if f.parsed_volume_year is not None
-    ]
+    vol_years = [f.parsed_volume_year for f in bucket if f.parsed_volume_year is not None]
     issue_years = [f.parsed_year for f in bucket if f.parsed_year is not None]
-    suggested_year = (
-        vol_years[0]
-        if vol_years
-        else (min(issue_years) if issue_years else None)
-    )
+    suggested_year = vol_years[0] if vol_years else (min(issue_years) if issue_years else None)
 
     return LocalGroupPreview(
         series_key=series_key,
@@ -407,9 +397,7 @@ async def attach_local_group(
     # collide with anything (unnumbered issues are allowed to coexist).
     existing_rows = (
         await db.execute(
-            select(LocalIssue.issue_number).where(
-                LocalIssue.local_volume_id == target_volume_id
-            )
+            select(LocalIssue.issue_number).where(LocalIssue.local_volume_id == target_volume_id)
         )
     ).scalars()
     existing_keys: set[str] = set()
@@ -622,11 +610,7 @@ async def get_local_volume_detail(
         return None
     issues = list(
         (
-            await db.execute(
-                select(LocalIssue).where(
-                    LocalIssue.local_volume_id == volume_id
-                )
-            )
+            await db.execute(select(LocalIssue).where(LocalIssue.local_volume_id == volume_id))
         ).scalars()
     )
     covers = await _local_issue_cover_files(db, [i.id for i in issues])
@@ -643,9 +627,7 @@ async def get_local_volume_detail(
     # Reading-progress bars for the issue grid — one batch lookup. A
     # local issue's file is its own cover file, so no issue->file hop.
     if user_id is not None:
-        bars = await progress_bars_by_file(
-            db, user_id, [r.cover_file_id for r in issue_refs]
-        )
+        bars = await progress_bars_by_file(db, user_id, [r.cover_file_id for r in issue_refs])
         for ref in issue_refs:
             ref.progress = bars.get(ref.cover_file_id)
     return LocalVolumeDetail(
@@ -658,9 +640,7 @@ async def get_local_volume_detail(
     )
 
 
-async def get_local_issue_detail(
-    db: AsyncSession, issue_id: uuid.UUID
-) -> LocalIssueDetail | None:
+async def get_local_issue_detail(db: AsyncSession, issue_id: uuid.UUID) -> LocalIssueDetail | None:
     """Build the /local/issue page payload, or None if no such issue.
 
     ``prev_issue`` / ``next_issue`` are the issue-number neighbors
@@ -684,25 +664,16 @@ async def get_local_issue_detail(
             .order_by(FileLocation.last_seen_at.desc())
         )
     ).all()
-    files = [
-        LocalIssueFileRef(file_id=file_id, path=path)
-        for file_id, path in file_rows
-    ]
+    files = [LocalIssueFileRef(file_id=file_id, path=path) for file_id, path in file_rows]
 
     # Sibling issues for prev/next navigation.
     siblings = list(
         (
-            await db.execute(
-                select(LocalIssue).where(
-                    LocalIssue.local_volume_id == volume.id
-                )
-            )
+            await db.execute(select(LocalIssue).where(LocalIssue.local_volume_id == volume.id))
         ).scalars()
     )
     siblings.sort(key=lambda i: sort_key_issue_number(i.issue_number))
-    sibling_covers = await _local_issue_cover_files(
-        db, [s.id for s in siblings]
-    )
+    sibling_covers = await _local_issue_cover_files(db, [s.id for s in siblings])
 
     def _ref(li: LocalIssue) -> LocalIssueRef:
         return LocalIssueRef(
@@ -712,17 +683,9 @@ async def get_local_issue_detail(
             cover_file_id=sibling_covers.get(li.id),
         )
 
-    idx = next(
-        (n for n, s in enumerate(siblings) if s.id == issue_id), None
-    )
-    prev_issue = (
-        _ref(siblings[idx - 1]) if idx is not None and idx > 0 else None
-    )
-    next_issue = (
-        _ref(siblings[idx + 1])
-        if idx is not None and idx < len(siblings) - 1
-        else None
-    )
+    idx = next((n for n, s in enumerate(siblings) if s.id == issue_id), None)
+    prev_issue = _ref(siblings[idx - 1]) if idx is not None and idx > 0 else None
+    next_issue = _ref(siblings[idx + 1]) if idx is not None and idx < len(siblings) - 1 else None
 
     return LocalIssueDetail(
         id=issue.id,
@@ -929,9 +892,7 @@ async def attach_supplement(
     return True
 
 
-async def list_volume_supplements(
-    db: AsyncSession, volume_cv_id: int
-) -> list[SupplementRef]:
+async def list_volume_supplements(db: AsyncSession, volume_cv_id: int) -> list[SupplementRef]:
     """Files attached to a CV volume as supplements — for the volume
     page's "Supplements" section.
 

@@ -39,9 +39,7 @@ def static_url(name: str) -> str:
         # ``usedforsecurity=False`` is purely a hint to FIPS-mode
         # OpenSSL; MD5 is fine for cache-busting (collision-free for
         # a small set of asset filenames).
-        digest = hashlib.md5(
-            path.read_bytes(), usedforsecurity=False
-        ).hexdigest()[:8]
+        digest = hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()[:8]
     except OSError:
         return f"/static/{name}"
     return f"/static/{name}?v={digest}"

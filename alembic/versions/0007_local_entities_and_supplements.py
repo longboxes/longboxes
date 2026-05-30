@@ -27,10 +27,7 @@ depends_on: str | Sequence[str] | None = None
 # CHECK-constraint value sets, kept as constants so upgrade/downgrade
 # can't drift.
 _STATUS_OLD = "('auto', 'confirmed', 'pending', 'rejected', 'unmatched')"
-_STATUS_NEW = (
-    "('auto', 'confirmed', 'pending', 'rejected', 'unmatched', "
-    "'local', 'supplement')"
-)
+_STATUS_NEW = "('auto', 'confirmed', 'pending', 'rejected', 'unmatched', 'local', 'supplement')"
 _SOURCE_OLD = "('comicinfo_cvid', 'filename', 'manual')"
 _SOURCE_NEW = "('comicinfo_cvid', 'filename', 'manual', 'local')"
 
@@ -80,9 +77,7 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
-    op.create_index(
-        "ix_local_issues_local_volume_id", "local_issues", ["local_volume_id"]
-    )
+    op.create_index("ix_local_issues_local_volume_id", "local_issues", ["local_volume_id"])
 
     # Polymorphic target columns on file_matches. ``issue_cv_id`` (from
     # migration 0005) is the CV-issue target; these add the local-issue
@@ -109,9 +104,7 @@ def upgrade() -> None:
         "file_matches",
         sa.Column("supplement_type", sa.String(), nullable=True),
     )
-    op.create_index(
-        "ix_file_matches_local_issue_id", "file_matches", ["local_issue_id"]
-    )
+    op.create_index("ix_file_matches_local_issue_id", "file_matches", ["local_issue_id"])
     op.create_index(
         "ix_file_matches_supplement_volume_cv_id",
         "file_matches",
@@ -129,30 +122,18 @@ def upgrade() -> None:
 
     # Widen the status + source CHECKs for the new enum values.
     op.drop_constraint("ck_file_matches_status", "file_matches", type_="check")
-    op.create_check_constraint(
-        "ck_file_matches_status", "file_matches", f"status IN {_STATUS_NEW}"
-    )
+    op.create_check_constraint("ck_file_matches_status", "file_matches", f"status IN {_STATUS_NEW}")
     op.drop_constraint("ck_file_matches_source", "file_matches", type_="check")
-    op.create_check_constraint(
-        "ck_file_matches_source", "file_matches", f"source IN {_SOURCE_NEW}"
-    )
+    op.create_check_constraint("ck_file_matches_source", "file_matches", f"source IN {_SOURCE_NEW}")
 
 
 def downgrade() -> None:
     op.drop_constraint("ck_file_matches_source", "file_matches", type_="check")
-    op.create_check_constraint(
-        "ck_file_matches_source", "file_matches", f"source IN {_SOURCE_OLD}"
-    )
+    op.create_check_constraint("ck_file_matches_source", "file_matches", f"source IN {_SOURCE_OLD}")
     op.drop_constraint("ck_file_matches_status", "file_matches", type_="check")
-    op.create_check_constraint(
-        "ck_file_matches_status", "file_matches", f"status IN {_STATUS_OLD}"
-    )
-    op.drop_constraint(
-        "ck_file_matches_single_target", "file_matches", type_="check"
-    )
-    op.drop_index(
-        "ix_file_matches_supplement_volume_cv_id", table_name="file_matches"
-    )
+    op.create_check_constraint("ck_file_matches_status", "file_matches", f"status IN {_STATUS_OLD}")
+    op.drop_constraint("ck_file_matches_single_target", "file_matches", type_="check")
+    op.drop_index("ix_file_matches_supplement_volume_cv_id", table_name="file_matches")
     op.drop_index("ix_file_matches_local_issue_id", table_name="file_matches")
     op.drop_column("file_matches", "supplement_type")
     op.drop_column("file_matches", "supplement_volume_cv_id")

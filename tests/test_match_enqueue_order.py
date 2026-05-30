@@ -92,9 +92,7 @@ def _sha(prefix: str) -> str:
 # ---- Lever 3: tier ordering ---------------------------------------------
 
 
-async def test_full_with_cvid_files_enqueue_before_partial_and_none(
-    db_session, _capture_enqueue
-):
+async def test_full_with_cvid_files_enqueue_before_partial_and_none(db_session, _capture_enqueue):
     """The cheapest matcher tier drains first. On a real library this
     is what makes the user-visible "library populated" milestone
     happen in hours instead of at the end of the run.
@@ -157,9 +155,7 @@ async def test_tier_ordering_holds_even_when_filesystem_order_is_inverted(
 # ---- Lever 4: within-tier series clustering ----------------------------
 
 
-async def test_same_series_files_cluster_within_tier(
-    db_session, _capture_enqueue
-):
+async def test_same_series_files_cluster_within_tier(db_session, _capture_enqueue):
     """Files in the same series share a parent directory in almost
     every real library layout — Mylar / Komga / Kapowarr / plain
     folders all do this. Sorting by the lex-first path means the
@@ -202,9 +198,7 @@ async def test_same_series_files_cluster_within_tier(
 # ---- Existing inclusion/exclusion semantics --------------------------
 
 
-async def test_already_matched_files_are_not_re_enqueued(
-    db_session, _capture_enqueue
-):
+async def test_already_matched_files_are_not_re_enqueued(db_session, _capture_enqueue):
     """Pin the existing inclusion rule: a file with an AUTO match is
     settled and the match-all enqueue must skip it. UNMATCHED and
     PENDING are transient — those still come through."""
@@ -246,9 +240,7 @@ async def test_already_matched_files_are_not_re_enqueued(
     assert set(_capture_enqueue.calls) == {str(pending.id), str(unmatched.id)}
 
 
-async def test_excluded_files_are_not_enqueued(
-    db_session, _capture_enqueue
-):
+async def test_excluded_files_are_not_enqueued(db_session, _capture_enqueue):
     """``excluded_from_matching=True`` files are out of the matcher's
     world entirely — they shouldn't surface in the match-all enqueue
     regardless of their match status."""
@@ -270,9 +262,7 @@ async def test_excluded_files_are_not_enqueued(
     assert _capture_enqueue.calls == [str(include.id)]
 
 
-async def test_file_with_no_locations_still_enqueues_at_tier_end(
-    db_session, _capture_enqueue
-):
+async def test_file_with_no_locations_still_enqueues_at_tier_end(db_session, _capture_enqueue):
     """The path proxy is a correlated subquery — when the file has
     no current locations the subquery returns NULL. In Postgres the
     default ASC sort puts NULLs last, so the file lands at the end

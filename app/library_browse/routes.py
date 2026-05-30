@@ -121,13 +121,11 @@ async def _publisher_for(db, publisher_cv_id: int | None) -> CvPublisher | None:
     pub = await db.get(CvPublisher, publisher_cv_id)
     if pub is None:
         return None
-    is_stub = (
-        isinstance(pub.raw_payload, dict)
-        and pub.raw_payload.get("_stub") is True
-    )
+    is_stub = isinstance(pub.raw_payload, dict) and pub.raw_payload.get("_stub") is True
     if is_stub:
         enqueue_revalidate("publisher", pub.cv_id)
     return pub
+
 
 def _cv_error_response(
     request: Request,
@@ -148,22 +146,15 @@ def _cv_error_response(
     """
     if isinstance(err, ComicVineRateLimitError):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        message = (
-            f"ComicVine is rate-limiting us. We couldn't load this "
-            f"{entity_label} right now."
-        )
+        message = f"ComicVine is rate-limiting us. We couldn't load this {entity_label} right now."
         hint = "Wait a minute or two, then try again."
     elif isinstance(err, ComicVineNotFoundError):
         status_code = status.HTTP_404_NOT_FOUND
-        message = (
-            f"ComicVine doesn't know about this {entity_label}."
-        )
+        message = f"ComicVine doesn't know about this {entity_label}."
         hint = None
     else:
         status_code = status.HTTP_502_BAD_GATEWAY
-        message = (
-            f"Couldn't reach ComicVine to load this {entity_label}."
-        )
+        message = f"Couldn't reach ComicVine to load this {entity_label}."
         hint = "This is usually transient — try again in a moment."
     return templates.TemplateResponse(
         request,
@@ -241,9 +232,7 @@ router = APIRouter()
 # ---- /library --------------------------------------------------------
 
 
-_LIBRARY_FORMATS = frozenset(
-    {"ongoing", "limited", "one_shot", "collection"}
-)
+_LIBRARY_FORMATS = frozenset({"ongoing", "limited", "one_shot", "collection"})
 
 
 def _normalize_format(raw: str | None) -> str | None:
@@ -390,9 +379,7 @@ async def library_fragment(
         if row.is_stub:
             enqueue_revalidate("volume", row.cv_id)
 
-    template_name = (
-        "_library_grid_items.html" if view == "grid" else "_library_table_rows.html"
-    )
+    template_name = "_library_grid_items.html" if view == "grid" else "_library_table_rows.html"
     return templates.TemplateResponse(
         request,
         template_name,
@@ -426,18 +413,24 @@ async def library_hydration(
 
     swaps = []
     for row in rows:
-        swaps.append({
-            "target_id": f"grid-volume-{row.cv_id}",
-            "html": str(library_grid_card(row)),
-        })
-        swaps.append({
-            "target_id": f"table-volume-{row.cv_id}",
-            "html": str(library_table_row(row)),
-        })
-    return JSONResponse({
-        "swaps": swaps,
-        "completed_ids": [row.cv_id for row in rows],
-    })
+        swaps.append(
+            {
+                "target_id": f"grid-volume-{row.cv_id}",
+                "html": str(library_grid_card(row)),
+            }
+        )
+        swaps.append(
+            {
+                "target_id": f"table-volume-{row.cv_id}",
+                "html": str(library_table_row(row)),
+            }
+        )
+    return JSONResponse(
+        {
+            "swaps": swaps,
+            "completed_ids": [row.cv_id for row in rows],
+        }
+    )
 
 
 @router.get("/volume-credits/hydration")
@@ -473,10 +466,12 @@ async def volume_credits_hydration(
         }
         for c in credits
     ]
-    return JSONResponse({
-        "swaps": swaps,
-        "completed_ids": [c.cv_id for c in credits],
-    })
+    return JSONResponse(
+        {
+            "swaps": swaps,
+            "completed_ids": [c.cv_id for c in credits],
+        }
+    )
 
 
 # ---- /volume/{id} ----------------------------------------------------
@@ -525,14 +520,21 @@ async def volume_page(
     try:
         async with cv_cache_ctx() as cache:
             detail = await get_volume_detail(
-                db, cv_id, cv_cache=cache, from_issue_cv_id=from_issue,
-                user_id=user.id, credit_filter=_parse_credit(credit),
+                db,
+                cv_id,
+                cv_cache=cache,
+                from_issue_cv_id=from_issue,
+                user_id=user.id,
+                credit_filter=_parse_credit(credit),
             )
     except ComicVineError as err:
         return _cv_error_response(request, user, err, entity_label="volume")
     if detail is None:
         return _entity_not_found_response(
-            request, user, entity_label="volume", cv_id=cv_id,
+            request,
+            user,
+            entity_label="volume",
+            cv_id=cv_id,
             hint="Add it from /admin first.",
         )
 
@@ -551,8 +553,7 @@ async def volume_page(
     # inside ``get_volume_detail`` so the route, the template, and the
     # arc rail all share the same window.
     window = detail.issues[
-        detail.initial_window_start
-        : detail.initial_window_start + detail.initial_window_size
+        detail.initial_window_start : detail.initial_window_start + detail.initial_window_size
     ]
 
     # Per-issue hydration for the visible window only. The bulk
@@ -632,8 +633,11 @@ async def volume_rail_fragment(
     """
     async with cv_cache_ctx() as cache:
         detail = await get_volume_detail(
-            db, cv_id, cv_cache=cache,
-            rail_window_start=start, rail_window_size=count,
+            db,
+            cv_id,
+            cv_cache=cache,
+            rail_window_start=start,
+            rail_window_size=count,
             credit_filter=_parse_credit(credit),
         )
     if detail is None:
@@ -679,19 +683,13 @@ async def volume_issues_hydration(
         return JSONResponse({"swaps": [], "completed_ids": []})
 
     async with cv_cache_ctx() as cache:
-        detail = await get_volume_detail(
-            db, cv_id, cv_cache=cache, user_id=user.id
-        )
+        detail = await get_volume_detail(db, cv_id, cv_cache=cache, user_id=user.id)
     if detail is None:
         return JSONResponse({"swaps": [], "completed_ids": []})
 
     wanted = set(issue_ids)
-    issue_row_macro = templates.env.get_template(
-        "_volume_macros.html"
-    ).module.volume_issue_row
-    issue_cover_card_macro = templates.env.get_template(
-        "_issue_card.html"
-    ).module.issue_cover_card
+    issue_row_macro = templates.env.get_template("_volume_macros.html").module.volume_issue_row
+    issue_cover_card_macro = templates.env.get_template("_issue_card.html").module.issue_cover_card
 
     # Each hydrated issue produces TWO swaps — one for the list view's
     # ``<tr>`` and one for the gallery view's cover-card ``<a>``. The
@@ -703,22 +701,26 @@ async def volume_issues_hydration(
     completed_ids = []
     for i in detail.issues:
         if i.cv_id in wanted and i.is_hydrated:
-            swaps.append({
-                "target_id": f"issue-row-{i.cv_id}",
-                "html": str(issue_row_macro(detail, i)),
-            })
-            swaps.append({
-                "target_id": f"gallery-issue-{i.cv_id}",
-                "html": str(issue_cover_card_macro(
-                    i, dom_id=f"gallery-issue-{i.cv_id}"
-                )),
-            })
+            swaps.append(
+                {
+                    "target_id": f"issue-row-{i.cv_id}",
+                    "html": str(issue_row_macro(detail, i)),
+                }
+            )
+            swaps.append(
+                {
+                    "target_id": f"gallery-issue-{i.cv_id}",
+                    "html": str(issue_cover_card_macro(i, dom_id=f"gallery-issue-{i.cv_id}")),
+                }
+            )
             completed_ids.append(i.cv_id)
 
-    return JSONResponse({
-        "swaps": swaps,
-        "completed_ids": completed_ids,
-    })
+    return JSONResponse(
+        {
+            "swaps": swaps,
+            "completed_ids": completed_ids,
+        }
+    )
 
 
 @router.post("/volume/{cv_id}/hydrate-issues")
@@ -748,16 +750,13 @@ async def hydrate_volume_issues(
     #     bulk fields but no arc / character credits.
     # Volumes after initial registration will have most rows in the
     # ``_bulk_hydrated`` state; the per-issue call upgrades them.
-    needs_fetch_stmt = (
-        select(CvIssue.cv_id)
-        .where(
-            CvIssue.cv_id.in_(body.issue_cv_ids),
-            CvIssue.volume_cv_id == cv_id,
-            or_(
-                CvIssue.fetched_at.is_(None),
-                CvIssue.raw_payload["_bulk_hydrated"].astext == "true",
-            ),
-        )
+    needs_fetch_stmt = select(CvIssue.cv_id).where(
+        CvIssue.cv_id.in_(body.issue_cv_ids),
+        CvIssue.volume_cv_id == cv_id,
+        or_(
+            CvIssue.fetched_at.is_(None),
+            CvIssue.raw_payload["_bulk_hydrated"].astext == "true",
+        ),
     )
     target_ids = list((await db.execute(needs_fetch_stmt)).scalars())
     for issue_cv_id in target_ids:
@@ -789,23 +788,22 @@ async def issue_page(
         return _cv_error_response(request, user, err, entity_label="issue")
     if detail is None:
         return _entity_not_found_response(
-            request, user, entity_label="issue", cv_id=cv_id,
+            request,
+            user,
+            entity_label="issue",
+            cv_id=cv_id,
             hint=(
                 "It may not exist on ComicVine, or its volume "
                 "hasn't been added to your library yet."
             ),
         )
-    publisher = await _publisher_for(
-        db, detail.volume.publisher_cv_id if detail.volume else None
-    )
+    publisher = await _publisher_for(db, detail.volume.publisher_cv_id if detail.volume else None)
     # Reading progress for the hero cover's progress bar — the first
     # file on disk, the same one the cover links into the reader for.
     reading_progress = None
     if detail.matched_files:
         reading_progress = progress_bar(
-            await get_read_progress(
-                db, user.id, detail.matched_files[0].file_id
-            )
+            await get_read_progress(db, user.id, detail.matched_files[0].file_id)
         )
     return templates.TemplateResponse(
         request,
@@ -1078,9 +1076,7 @@ async def local_volume_merge_form(
         )
     # Every OTHER local volume is a merge-source candidate; the volume
     # being merged into is filtered out so it can't be picked.
-    others = [
-        v for v in await list_local_volumes(db) if v["id"] != str(volume_id)
-    ]
+    others = [v for v in await list_local_volumes(db) if v["id"] != str(volume_id)]
     return templates.TemplateResponse(
         request,
         "local_volume_merge.html",
@@ -1108,15 +1104,12 @@ async def local_volume_merge_submit(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Pick a local volume to merge in.",
         )
-    result = await merge_local_volumes(
-        db, target_id=volume_id, source_id=source_id
-    )
+    result = await merge_local_volumes(db, target_id=volume_id, source_id=source_id)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Couldn't merge — the chosen volume no longer exists, "
-                "or it's this same volume."
+                "Couldn't merge — the chosen volume no longer exists, or it's this same volume."
             ),
         )
     return RedirectResponse(
@@ -1151,7 +1144,10 @@ async def arc_page(
         return _cv_error_response(request, user, err, entity_label="story arc")
     if detail is None:
         return _entity_not_found_response(
-            request, user, entity_label="story arc", cv_id=cv_id,
+            request,
+            user,
+            entity_label="story arc",
+            cv_id=cv_id,
         )
 
     # Publisher comes straight off the arc's CV payload (``publisher``
@@ -1247,20 +1243,15 @@ async def hydrate_arc_issues(
     # stubs (``fetched_at IS NULL``) plus bulk-only rows
     # (``_bulk_hydrated`` flag set). Issues with no ``cv_issues``
     # row at all are enqueued unconditionally below.
-    needs_fetch_stmt = (
-        select(CvIssue.cv_id)
-        .where(
-            CvIssue.cv_id.in_(candidate_ids),
-            or_(
-                CvIssue.fetched_at.is_(None),
-                CvIssue.raw_payload["_bulk_hydrated"].astext == "true",
-            ),
-        )
+    needs_fetch_stmt = select(CvIssue.cv_id).where(
+        CvIssue.cv_id.in_(candidate_ids),
+        or_(
+            CvIssue.fetched_at.is_(None),
+            CvIssue.raw_payload["_bulk_hydrated"].astext == "true",
+        ),
     )
     db_ids = set((await db.execute(needs_fetch_stmt)).scalars())
-    existing_stmt = select(CvIssue.cv_id).where(
-        CvIssue.cv_id.in_(candidate_ids)
-    )
+    existing_stmt = select(CvIssue.cv_id).where(CvIssue.cv_id.in_(candidate_ids))
     existing_ids = set((await db.execute(existing_stmt)).scalars())
     # Members in the arc payload that have no ``cv_issues`` row at
     # all — the volume hasn't been registered yet. ``enqueue_revalidate``
@@ -1304,33 +1295,33 @@ async def arc_issues_hydration(
         return JSONResponse({"swaps": [], "completed_ids": []})
 
     wanted = set(issue_ids)
-    arc_issue_row_macro = templates.env.get_template(
-        "_arc_macros.html"
-    ).module.arc_issue_row
-    issue_cover_card_macro = templates.env.get_template(
-        "_issue_card.html"
-    ).module.issue_cover_card
+    arc_issue_row_macro = templates.env.get_template("_arc_macros.html").module.arc_issue_row
+    issue_cover_card_macro = templates.env.get_template("_issue_card.html").module.issue_cover_card
 
     swaps = []
     completed_ids = []
     for i in detail.issues:
         if i.cv_id in wanted and i.is_hydrated:
-            swaps.append({
-                "target_id": f"arc-issue-row-{i.cv_id}",
-                "html": str(arc_issue_row_macro(i)),
-            })
-            swaps.append({
-                "target_id": f"arc-gallery-{i.cv_id}",
-                "html": str(issue_cover_card_macro(
-                    i, dom_id=f"arc-gallery-{i.cv_id}"
-                )),
-            })
+            swaps.append(
+                {
+                    "target_id": f"arc-issue-row-{i.cv_id}",
+                    "html": str(arc_issue_row_macro(i)),
+                }
+            )
+            swaps.append(
+                {
+                    "target_id": f"arc-gallery-{i.cv_id}",
+                    "html": str(issue_cover_card_macro(i, dom_id=f"arc-gallery-{i.cv_id}")),
+                }
+            )
             completed_ids.append(i.cv_id)
 
-    return JSONResponse({
-        "swaps": swaps,
-        "completed_ids": completed_ids,
-    })
+    return JSONResponse(
+        {
+            "swaps": swaps,
+            "completed_ids": completed_ids,
+        }
+    )
 
 
 # ---- /publisher/{id} -------------------------------------------------
@@ -1402,12 +1393,13 @@ async def character_page(
                 teams_page=tpage,
             )
     except ComicVineError as err:
-        return _cv_error_response(
-            request, user, err, entity_label="character"
-        )
+        return _cv_error_response(request, user, err, entity_label="character")
     if detail is None:
         return _entity_not_found_response(
-            request, user, entity_label="character", cv_id=cv_id,
+            request,
+            user,
+            entity_label="character",
+            cv_id=cv_id,
         )
 
     publisher = await _publisher_for(db, detail.publisher_cv_id)
@@ -1417,9 +1409,7 @@ async def character_page(
     if detail.volumes_scraping:
         enqueue_character_volumes_scrape(
             cv_id,
-            site_url=(detail.character.raw_payload or {}).get(
-                "site_detail_url"
-            ),
+            site_url=(detail.character.raw_payload or {}).get("site_detail_url"),
         )
     # Hydrate the volume cards shown on this page so their cover / year
     # / format fill in on a later render.
@@ -1531,12 +1521,13 @@ async def creator_page(
                 arcs_letter=_normalize_letter(aletter),
             )
     except ComicVineError as err:
-        return _cv_error_response(
-            request, user, err, entity_label="creator"
-        )
+        return _cv_error_response(request, user, err, entity_label="creator")
     if detail is None:
         return _entity_not_found_response(
-            request, user, entity_label="creator", cv_id=cv_id,
+            request,
+            user,
+            entity_label="creator",
+            cv_id=cv_id,
         )
 
     # Hydrate the volumes shown on this page so their cover thumbnails
@@ -1584,8 +1575,13 @@ async def team_page(
     try:
         async with cv_cache_ctx() as cache:
             detail = await get_team_detail(
-                db, cache, cv_id, page=page, page_size=page_size,
-                friends_page=fpage, enemies_page=epage,
+                db,
+                cache,
+                cv_id,
+                page=page,
+                page_size=page_size,
+                friends_page=fpage,
+                enemies_page=epage,
                 volumes_page=vpage,
                 volumes_letter=_normalize_letter(vletter),
                 arcs_page=apage,
@@ -1595,7 +1591,10 @@ async def team_page(
         return _cv_error_response(request, user, err, entity_label="team")
     if detail is None:
         return _entity_not_found_response(
-            request, user, entity_label="team", cv_id=cv_id,
+            request,
+            user,
+            entity_label="team",
+            cv_id=cv_id,
         )
 
     publisher = await _publisher_for(db, detail.publisher_cv_id)
@@ -1665,15 +1664,21 @@ async def publisher_page(
     try:
         async with cv_cache_ctx() as cache:
             detail = await get_publisher_detail(
-                db, cache, cv_id,
-                arcs_limit=page_size, arcs_offset=0,
+                db,
+                cache,
+                cv_id,
+                arcs_limit=page_size,
+                arcs_offset=0,
                 arcs_query=q_norm,
             )
     except ComicVineError as err:
         return _cv_error_response(request, user, err, entity_label="publisher")
     if detail is None:
         return _entity_not_found_response(
-            request, user, entity_label="publisher", cv_id=cv_id,
+            request,
+            user,
+            entity_label="publisher",
+            cv_id=cv_id,
         )
     _enqueue_arc_hydration(detail)
     return templates.TemplateResponse(
@@ -1714,8 +1719,11 @@ async def publisher_arcs_fragment(
     page_size = await get_page_size(db)
     async with cv_cache_ctx() as cache:
         detail = await get_publisher_detail(
-            db, cache, cv_id,
-            arcs_limit=page_size, arcs_offset=offset,
+            db,
+            cache,
+            cv_id,
+            arcs_limit=page_size,
+            arcs_offset=offset,
             arcs_query=q_norm,
         )
     if detail is None:
@@ -1725,9 +1733,7 @@ async def publisher_arcs_fragment(
         )
     _enqueue_arc_hydration(detail)
     template_name = (
-        "_publisher_arcs_list_rows.html"
-        if view == "list"
-        else "_publisher_arcs_gallery_items.html"
+        "_publisher_arcs_list_rows.html" if view == "list" else "_publisher_arcs_gallery_items.html"
     )
     return templates.TemplateResponse(
         request,
@@ -1775,18 +1781,24 @@ async def publisher_arcs_hydration(
 
     swaps = []
     for row in rows:
-        swaps.append({
-            "target_id": f"list-arc-{row.cv_id}",
-            "html": str(list_row(row)),
-        })
-        swaps.append({
-            "target_id": f"gallery-arc-{row.cv_id}",
-            "html": str(gallery_card(row)),
-        })
-    return JSONResponse({
-        "swaps": swaps,
-        "completed_ids": [row.cv_id for row in rows],
-    })
+        swaps.append(
+            {
+                "target_id": f"list-arc-{row.cv_id}",
+                "html": str(list_row(row)),
+            }
+        )
+        swaps.append(
+            {
+                "target_id": f"gallery-arc-{row.cv_id}",
+                "html": str(gallery_card(row)),
+            }
+        )
+    return JSONResponse(
+        {
+            "swaps": swaps,
+            "completed_ids": [row.cv_id for row in rows],
+        }
+    )
 
 
 # ---- Fix match (re-pick a wrong volume) ------------------------------
@@ -1828,7 +1840,10 @@ async def volume_fix_match_search(
         try:
             cache = ComicVineCache(client, enqueue_revalidate=enqueue_revalidate)
             envelope = await cache.search(
-                db, cleaned, resources="volume", limit=50,
+                db,
+                cleaned,
+                resources="volume",
+                limit=50,
             )
             results = shape_volume_results(envelope)
         except ComicVineError as e:
@@ -1837,9 +1852,7 @@ async def volume_fix_match_search(
             await client.aclose()
 
     if results:
-        pub_map = await publishers_for_volumes(
-            db, {r["cv_id"] for r in results}
-        )
+        pub_map = await publishers_for_volumes(db, {r["cv_id"] for r in results})
         for r in results:
             if not r["publisher"]:
                 r["publisher"] = pub_map.get(r["cv_id"])

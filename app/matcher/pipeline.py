@@ -156,15 +156,11 @@ def _prelim_score(series_candidates: list[str], name: str) -> float:
     """
     longest = max(series_candidates, key=len)
     strict = fuzz.token_sort_ratio(longest, name) / 100.0
-    forgiving = max(
-        fuzz.token_set_ratio(t, name) / 100.0 for t in series_candidates
-    )
+    forgiving = max(fuzz.token_set_ratio(t, name) / 100.0 for t in series_candidates)
     return (strict + forgiving) / 2.0
 
 
-def _prelim_sort_key(
-    item: tuple[dict, float], parsed_year: int | None
-) -> tuple[float, int]:
+def _prelim_sort_key(item: tuple[dict, float], parsed_year: int | None) -> tuple[float, int]:
     """Sort key for the Stage 3 prefilter.
 
     Primary: prefilter score (descending — so we negate for ``sort``'s
@@ -245,9 +241,7 @@ async def match_file(
             source=MatchSource(existing_match.source),
             issue_cv_id=existing_match.issue_cv_id,
             confidence=(
-                float(existing_match.confidence)
-                if existing_match.confidence is not None
-                else 0.0
+                float(existing_match.confidence) if existing_match.confidence is not None else 0.0
             ),
             candidates=existing_match.candidates or [],
         )
@@ -302,17 +296,13 @@ async def match_file(
     # scoring — a format mismatch is a near-disqualifying penalty.
     file_format = classify_file_format(file_row.page_count)
     parsed = parse_filename(location.path)
-    result = await _stage_2_through_4(
-        db, cv_cache, parsed, comicinfo, file_format
-    )
+    result = await _stage_2_through_4(db, cv_cache, parsed, comicinfo, file_format)
     await _persist(db, file_id, result)
     await _notify_winner(db, cv_cache, result)
     return result
 
 
-async def _notify_winner(
-    db: AsyncSession, cv_cache: ComicVineCache, result: MatchResult
-) -> None:
+async def _notify_winner(db: AsyncSession, cv_cache: ComicVineCache, result: MatchResult) -> None:
     """Tell the cache layer about the matcher's winning volume so the
     cheap one-call bulk hydration gets enqueued.
 
@@ -359,9 +349,7 @@ async def _notify_winner(
     already_bulk_hydrated = await db.scalar(
         select(CvIssue.cv_id)
         .where(CvIssue.volume_cv_id == issue_row.volume_cv_id)
-        .where(
-            text("cv_issues.raw_payload ->> '_bulk_hydrated' = 'true'")
-        )
+        .where(text("cv_issues.raw_payload ->> '_bulk_hydrated' = 'true'"))
         .limit(1)
     )
     if already_bulk_hydrated is not None:
@@ -449,8 +437,7 @@ async def _stage_1(
             await cv_cache.get_volume(db, issue_volume_cv_id)
         except ComicVineError as e:
             logger.warning(
-                "Stage 1: eager volume hydration failed for %d: %s; "
-                "leaving as stub",
+                "Stage 1: eager volume hydration failed for %d: %s; leaving as stub",
                 issue_volume_cv_id,
                 e,
             )
@@ -587,7 +574,7 @@ async def _stage_2_through_4(
         except ComicVineError as e:
             logger.warning("Stage 3 search failed for series %r: %s", term, e)
             continue
-        for stub in (envelope.get("results") or []):
+        for stub in envelope.get("results") or []:
             vid = safe_int(stub.get("id"))
             if vid is None or vid in seen_volume_ids:
                 continue
@@ -861,9 +848,7 @@ def _looks_like_high_number(s: str) -> bool:
 # ---- DB helpers ---------------------------------------------------------
 
 
-async def _first_current_location(
-    db: AsyncSession, file_id: uuid.UUID
-) -> FileLocation | None:
+async def _first_current_location(db: AsyncSession, file_id: uuid.UUID) -> FileLocation | None:
     stmt = (
         select(FileLocation)
         .where(
@@ -921,9 +906,7 @@ def _normalize_issue_number(value: str | None) -> str:
     return s
 
 
-async def _load_comicinfo(
-    path: str, archive_backend: str
-) -> ComicInfoExtract | None:
+async def _load_comicinfo(path: str, archive_backend: str) -> ComicInfoExtract | None:
     """Open the archive and parse its metadata. None on any failure.
 
     ``archive_backend`` is the caller-resolved admin setting; passed
@@ -947,9 +930,11 @@ async def _load_comicinfo(
     Archive reads are off the event loop — comicbox + rarfile can
     shell out / parse heavy formats, and the matcher runs across a
     list of files where blocking on each would compound."""
+
     def _read() -> tuple[bytes | None, bytes | None]:
         reader = open_archive(path, backend=archive_backend)
         return reader.read_comicinfo(), reader.read_metroninfo()
+
     try:
         comicinfo_bytes, metroninfo_bytes = await asyncio.to_thread(_read)
     except (ArchiveError, UnsupportedArchiveError, OSError) as e:
@@ -976,9 +961,7 @@ async def _load_comicinfo(
 # ---- Persistence --------------------------------------------------------
 
 
-async def _persist(
-    db: AsyncSession, file_id: uuid.UUID, result: MatchResult
-) -> None:
+async def _persist(db: AsyncSession, file_id: uuid.UUID, result: MatchResult) -> None:
     """Upsert the file_matches row. Caller doesn't need to commit; we do."""
     now = datetime.now(tz=UTC)
     confidence = (

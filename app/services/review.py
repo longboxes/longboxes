@@ -306,9 +306,7 @@ async def list_pending_matches(
         stmt = stmt.where(FileMatch.confidence >= Decimal(str(min_confidence)))
     if max_confidence is not None:
         stmt = stmt.where(FileMatch.confidence <= Decimal(str(max_confidence)))
-    stmt = stmt.order_by(
-        FileMatch.confidence.desc(), FileMatch.matched_at.asc()
-    )
+    stmt = stmt.order_by(FileMatch.confidence.desc(), FileMatch.matched_at.asc())
     if file_ids is None:
         # Page-mode: bound the fetch with ``limit`` / ``offset``.
         # When ``file_ids`` was provided, the IN clause is the bound.
@@ -323,7 +321,7 @@ async def list_pending_matches(
     issue_ids: set[int] = set()
     volume_ids: set[int] = set()
     for row in raw_rows:
-        for c in (row.candidates or []):
+        for c in row.candidates or []:
             cid = c.get("issue_cv_id")
             if isinstance(cid, int):
                 issue_ids.add(cid)
@@ -361,8 +359,7 @@ async def list_pending_matches(
         candidates = [
             built
             for c in candidates_blob
-            if (built := _build_candidate(c, issue_by_id, volume_by_id))
-            is not None
+            if (built := _build_candidate(c, issue_by_id, volume_by_id)) is not None
         ]
         top = candidates[0] if candidates else None
         path = row.path or "(no current location)"
@@ -415,9 +412,7 @@ PENDING_GROUP_ROW_CAP = 500
 TOP_VOLUME_SUGGESTIONS = 5
 
 
-def _group_key_from_parsed(
-    parsed_series: str | None, parsed_long_series: str | None
-) -> str | None:
+def _group_key_from_parsed(parsed_series: str | None, parsed_long_series: str | None) -> str | None:
     """The grouping rule, in terms of the two parser outputs.
 
     Prefers ``parsed_long_series`` when it differs from
@@ -432,11 +427,7 @@ def _group_key_from_parsed(
     fields but no PendingRow yet) and the enriched-row code path can
     use the exact same logic.
     """
-    if (
-        parsed_long_series
-        and parsed_series
-        and parsed_long_series.lower() != parsed_series.lower()
-    ):
+    if parsed_long_series and parsed_series and parsed_long_series.lower() != parsed_series.lower():
         return parsed_long_series
     return parsed_series or parsed_long_series
 
@@ -521,9 +512,7 @@ async def _list_pending_files_by_group(
         stmt = stmt.where(FileMatch.confidence >= Decimal(str(min_confidence)))
     if max_confidence is not None:
         stmt = stmt.where(FileMatch.confidence <= Decimal(str(max_confidence)))
-    stmt = stmt.order_by(
-        FileMatch.confidence.desc(), FileMatch.matched_at.asc()
-    )
+    stmt = stmt.order_by(FileMatch.confidence.desc(), FileMatch.matched_at.asc())
 
     cheap_rows = (await db.execute(stmt)).all()
 
@@ -538,9 +527,7 @@ async def _list_pending_files_by_group(
                 file_id=r.file_id,
                 path=path,
                 filename=filename,
-                confidence=(
-                    float(r.confidence) if r.confidence is not None else None
-                ),
+                confidence=(float(r.confidence) if r.confidence is not None else None),
                 parsed_issue_number=parsed.issue_number,
                 parsed_year=parsed.year,
                 parsed_volume_year=parsed.volume_year,
@@ -604,9 +591,7 @@ async def list_pending_groups(
     selected_file_ids: list[Any] = []
     for key in ordered_keys:
         bucket = cheap_buckets[key]
-        if selected_file_ids and (
-            len(selected_file_ids) + len(bucket) > PENDING_GROUP_ROW_CAP
-        ):
+        if selected_file_ids and (len(selected_file_ids) + len(bucket) > PENDING_GROUP_ROW_CAP):
             # Adding this group would cross the cap. Stop — every
             # remaining group is reported via ``hit_row_cap``.
             break
@@ -656,9 +641,7 @@ async def list_pending_groups(
         # file list read 1, 2, 3, … rather than matcher-confidence
         # order. Done after ``_aggregate_volume_suggestions`` so the
         # candidate tally (and thus the suggested volume) is unchanged.
-        group_rows.sort(
-            key=lambda r: sort_key_issue_number(r.parsed_issue_number)
-        )
+        group_rows.sort(key=lambda r: sort_key_issue_number(r.parsed_issue_number))
         groups.append(
             PendingGroup(
                 series_key=key,
@@ -698,9 +681,7 @@ class GroupReference:
     year_max: int | None
 
 
-async def get_group_reference(
-    db: AsyncSession, *, series_key: str | None
-) -> GroupReference | None:
+async def get_group_reference(db: AsyncSession, *, series_key: str | None) -> GroupReference | None:
     """Summarize one PENDING series group for the volume-search
     reference card.
 
@@ -771,9 +752,7 @@ class FileReview:
     parsed_volume_year: int | None
 
 
-async def get_file_review(
-    db: AsyncSession, file_id: Any
-) -> FileReview | None:
+async def get_file_review(db: AsyncSession, file_id: Any) -> FileReview | None:
     """Load one file's full review detail.
 
     Returns None when the file has no ``file_matches`` row — the
@@ -851,13 +830,9 @@ async def get_file_review(
 
     current_match: CandidateRow | None = None
     if isinstance(fm.issue_cv_id, int):
-        current_match = next(
-            (c for c in candidates if c.issue_cv_id == fm.issue_cv_id), None
-        )
+        current_match = next((c for c in candidates if c.issue_cv_id == fm.issue_cv_id), None)
         if current_match is None:
-            current_match = _candidate_from_issue(
-                fm.issue_cv_id, issue_by_id, volume_by_id
-            )
+            current_match = _candidate_from_issue(fm.issue_cv_id, issue_by_id, volume_by_id)
 
     parsed = parse_filename(filename)
     return FileReview(
@@ -866,9 +841,7 @@ async def get_file_review(
         filename=filename,
         size_bytes=file.size_bytes if file else None,
         sha256_short=(file.sha256 if file else "")[:12],
-        comicinfo_status=(
-            (file.comicinfo_status if file else None) or ComicInfoStatus.NONE.value
-        ),
+        comicinfo_status=((file.comicinfo_status if file else None) or ComicInfoStatus.NONE.value),
         page_count=file.page_count if file else None,
         archive_format=file.archive_format if file else None,
         format_guess=classify_file_format(file.page_count if file else None),
@@ -919,19 +892,13 @@ async def list_volume_issues(
     number comparison ties to it is flagged ``is_suggested``.
     """
     issues = (
-        (
-            await db.execute(
-                select(CvIssue).where(CvIssue.volume_cv_id == volume_cv_id)
-            )
-        )
+        (await db.execute(select(CvIssue).where(CvIssue.volume_cv_id == volume_cv_id)))
         .scalars()
         .all()
     )
 
     volume = await db.get(CvVolume, volume_cv_id)
-    volume_cover = (
-        cv_image_url(volume.raw_payload, "thumb") if volume is not None else None
-    )
+    volume_cover = cv_image_url(volume.raw_payload, "thumb") if volume is not None else None
 
     suggested_cv_id: int | None = None
     if suggested_number is not None:
@@ -944,9 +911,7 @@ async def list_volume_issues(
             issue_cv_id=issue.cv_id,
             issue_number=issue.issue_number,
             name=issue.name,
-            cover_date=(
-                issue.cover_date.isoformat() if issue.cover_date else None
-            ),
+            cover_date=(issue.cover_date.isoformat() if issue.cover_date else None),
             cover_url=cv_image_url(issue.raw_payload, "thumb") or volume_cover,
             is_suggested=issue.cv_id == suggested_cv_id,
         )
@@ -1117,7 +1082,8 @@ async def preview_volume_confirm(
     group_file_ids = [f.file_id for f in bucket]
     if group_file_ids:
         group_rows, _total = await list_pending_matches(
-            db, file_ids=group_file_ids,
+            db,
+            file_ids=group_file_ids,
         )
     else:
         group_rows = []
@@ -1143,13 +1109,9 @@ async def preview_volume_confirm(
         if r.parsed_issue_number is None:
             skip_reason = "no issue number parsed from filename"
         else:
-            matched = await find_issue_by_number(
-                db, volume_cv_id, r.parsed_issue_number
-            )
+            matched = await find_issue_by_number(db, volume_cv_id, r.parsed_issue_number)
             if matched is None:
-                skip_reason = (
-                    f"volume has no issue #{r.parsed_issue_number}"
-                )
+                skip_reason = f"volume has no issue #{r.parsed_issue_number}"
             else:
                 matched_issue_cv_id = matched.cv_id
                 matched_issue_number = matched.issue_number
@@ -1164,9 +1126,7 @@ async def preview_volume_confirm(
                 # placeholder, and the real per-issue cover fills in
                 # once the volume's bulk issue-hydration job
                 # (``hydrate_volume_issues``) runs.
-                matched_issue_cover_url = cv_image_url(
-                    matched.raw_payload, "thumb"
-                )
+                matched_issue_cover_url = cv_image_url(matched.raw_payload, "thumb")
 
         items.append(
             VolumeConfirmItem(
@@ -1243,7 +1203,9 @@ async def execute_volume_confirm(
     confirmed in another tab); the executor only writes rows that
     are still PENDING."""
     preview = await preview_volume_confirm(
-        db, series_key=series_key, volume_cv_id=volume_cv_id,
+        db,
+        series_key=series_key,
+        volume_cv_id=volume_cv_id,
     )
     if preview is None:
         return None
@@ -1368,9 +1330,7 @@ async def execute_fix_match(
             skipped += 1
             continue
 
-        matched = await find_issue_by_number(
-            db, new_volume_cv_id, parsed.issue_number
-        )
+        matched = await find_issue_by_number(db, new_volume_cv_id, parsed.issue_number)
         if matched is None:
             skipped += 1
             continue
@@ -1384,7 +1344,8 @@ async def execute_fix_match(
 
     await db.commit()
     return FixMatchResult(
-        rematched_count=rematched, skipped_count=skipped,
+        rematched_count=rematched,
+        skipped_count=skipped,
     )
 
 
@@ -1478,7 +1439,7 @@ async def _aggregate_volume_suggestions(
     """
     per_volume: dict[int, VolumeSuggestion] = {}
     for r in group_rows:
-        for cand in (await _candidates_for_row(db, r.file_id)):
+        for cand in await _candidates_for_row(db, r.file_id):
             vid = cand.get("volume_cv_id")
             if not isinstance(vid, int):
                 continue
@@ -1494,12 +1455,8 @@ async def _aggregate_volume_suggestions(
 
     suggestions = list(per_volume.values())
     if suggestions:
-        vol_stmt = select(CvVolume).where(
-            CvVolume.cv_id.in_([s.volume_cv_id for s in suggestions])
-        )
-        volume_by_id = {
-            v.cv_id: v for v in (await db.execute(vol_stmt)).scalars()
-        }
+        vol_stmt = select(CvVolume).where(CvVolume.cv_id.in_([s.volume_cv_id for s in suggestions]))
+        volume_by_id = {v.cv_id: v for v in (await db.execute(vol_stmt)).scalars()}
         for s in suggestions:
             volume = volume_by_id.get(s.volume_cv_id)
             if volume is not None:
@@ -1515,9 +1472,7 @@ async def _aggregate_volume_suggestions(
     return suggestions
 
 
-async def _candidates_for_row(
-    db: AsyncSession, file_id: Any
-) -> list[dict]:
+async def _candidates_for_row(db: AsyncSession, file_id: Any) -> list[dict]:
     """Re-fetch the candidates JSON for a single file row.
 
     ``list_pending_matches`` already pulled the candidates for the
@@ -1602,13 +1557,9 @@ def _build_candidate(
         issue_name=issue_name,
         format=classify_cv_volume(volume) if volume is not None else None,
         volume_description=(
-            (volume.raw_payload or {}).get("description")
-            if volume is not None
-            else None
+            (volume.raw_payload or {}).get("description") if volume is not None else None
         ),
-        volume_publisher=(
-            _volume_publisher(volume) if volume is not None else None
-        ),
+        volume_publisher=(_volume_publisher(volume) if volume is not None else None),
     )
 
 
@@ -1627,11 +1578,7 @@ def _candidate_from_issue(
     issue = issue_by_id.get(issue_cv_id)
     if issue is None:
         return None
-    volume = (
-        volume_by_id.get(issue.volume_cv_id)
-        if isinstance(issue.volume_cv_id, int)
-        else None
-    )
+    volume = volume_by_id.get(issue.volume_cv_id) if isinstance(issue.volume_cv_id, int) else None
     cover_url = cv_image_url(issue.raw_payload, "thumb")
     if cover_url is None and volume is not None:
         cover_url = cv_image_url(volume.raw_payload, "thumb")
@@ -1646,22 +1593,16 @@ def _candidate_from_issue(
         issue_name=issue.name,
         format=classify_cv_volume(volume) if volume is not None else None,
         volume_description=(
-            (volume.raw_payload or {}).get("description")
-            if volume is not None
-            else None
+            (volume.raw_payload or {}).get("description") if volume is not None else None
         ),
-        volume_publisher=(
-            _volume_publisher(volume) if volume is not None else None
-        ),
+        volume_publisher=(_volume_publisher(volume) if volume is not None else None),
     )
 
 
 # ---- Bulk exclude-from-matching ---------------------------------------
 
 
-async def exclude_files_by_series(
-    db: AsyncSession, *, series_key: str | None
-) -> int:
+async def exclude_files_by_series(db: AsyncSession, *, series_key: str | None) -> int:
     """Flip ``excluded_from_matching = True`` on every reviewable
     file whose parsed series-group key matches ``series_key``.
 
@@ -1697,16 +1638,16 @@ async def exclude_files_by_series(
     file_ids = [f.file_id for f in bucket]
 
     result = await db.execute(
-        update(File)
-        .where(File.id.in_(file_ids))
-        .values(excluded_from_matching=True)
+        update(File).where(File.id.in_(file_ids)).values(excluded_from_matching=True)
     )
     await db.commit()
     return result.rowcount or 0
 
 
 async def exclude_single_file(
-    db: AsyncSession, *, file_id  # uuid.UUID
+    db: AsyncSession,
+    *,
+    file_id,  # uuid.UUID
 ) -> bool:
     """Per-file version of the same lever — flip one file's
     ``excluded_from_matching`` flag. Returns False when the file
