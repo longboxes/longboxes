@@ -41,6 +41,7 @@ from app.models import (
     CvTeam,
     CvVolume,
 )
+from app.services.cv_description import rewrite_payload_descriptions
 from app.services.cv_helpers import safe_int
 from app.services.settings import get_cv_ttl_overrides
 
@@ -482,6 +483,11 @@ class ComicVineCache:
     # ---- Upsert helpers -------------------------------------------------
 
     async def _upsert_volume(self, db: AsyncSession, payload: dict) -> CvVolume:
+        # Rewrite ComicVine-relative href URLs in description / deck
+        # so links route into Longboxes (for the 7 internal types) or
+        # absolutize to comicvine.gamespot.com (for everything else).
+        # Mutates in place; idempotent — safe on already-rewritten data.
+        rewrite_payload_descriptions(payload)
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         publisher_payload = payload.get("publisher") or {}
@@ -554,6 +560,8 @@ class ComicVineCache:
         return result
 
     async def _upsert_issue(self, db: AsyncSession, payload: dict) -> CvIssue:
+        # Rewrite description / deck CV links — see _upsert_volume.
+        rewrite_payload_descriptions(payload)
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         volume_payload = payload.get("volume") or {}
@@ -637,6 +645,8 @@ class ComicVineCache:
         ``_stub: True``; the full CV publisher payload includes the image
         dict, location, deck/description, etc. This upsert overwrites
         with the complete payload."""
+        # Rewrite description / deck CV links — see _upsert_volume.
+        rewrite_payload_descriptions(payload)
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (
@@ -663,6 +673,8 @@ class ComicVineCache:
         return result
 
     async def _upsert_story_arc(self, db: AsyncSession, payload: dict) -> CvStoryArc:
+        # Rewrite description / deck CV links — see _upsert_volume.
+        rewrite_payload_descriptions(payload)
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (
@@ -689,6 +701,8 @@ class ComicVineCache:
         return result
 
     async def _upsert_character(self, db: AsyncSession, payload: dict) -> CvCharacter:
+        # Rewrite description / deck CV links — see _upsert_volume.
+        rewrite_payload_descriptions(payload)
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (
@@ -715,6 +729,8 @@ class ComicVineCache:
         return result
 
     async def _upsert_person(self, db: AsyncSession, payload: dict) -> CvPerson:
+        # Rewrite description / deck CV links — see _upsert_volume.
+        rewrite_payload_descriptions(payload)
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (
@@ -741,6 +757,8 @@ class ComicVineCache:
         return result
 
     async def _upsert_team(self, db: AsyncSession, payload: dict) -> CvTeam:
+        # Rewrite description / deck CV links — see _upsert_volume.
+        rewrite_payload_descriptions(payload)
         now = datetime.now(tz=UTC)
         cv_id = int(payload["id"])
         stmt = (

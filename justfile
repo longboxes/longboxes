@@ -102,6 +102,15 @@ reset-password username password:
 list-users:
     docker compose exec web python -m app.scripts.list_users
 
+# Walk every cv_* row and rewrite ComicVine relative URLs in
+# description / deck so internal types route to /volume/{id},
+# /character/{id}, etc. and external types (locations, concepts,
+# objects) absolutize to comicvine.gamespot.com. Idempotent; safe to
+# re-run. New cache writes already go through the same rewriter; this
+# command exists to backfill rows cached before the rewriter shipped.
+backfill-descriptions:
+    docker compose exec web python -m app.scripts.backfill_cv_descriptions
+
 # Lint
 lint:
     docker compose exec web ruff check .
