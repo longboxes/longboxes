@@ -2,6 +2,8 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
+import cloudflare from "@astrojs/cloudflare";
+
 // Longboxes documentation site.
 //
 // Starlight provides the navigation, search (Pagefind), dark/light toggle,
@@ -13,6 +15,7 @@ import starlight from "@astrojs/starlight";
 // To build static output for deploy: `npm run build` (writes `dist/`).
 export default defineConfig({
   site: "https://docs.longboxes.app",
+
   integrations: [
     starlight({
       title: "Longboxes",
@@ -112,4 +115,6 @@ export default defineConfig({
       lastUpdated: true,
     }),
   ],
+
+  adapter: cloudflare()
 });
