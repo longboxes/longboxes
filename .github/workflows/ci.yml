@@ -1,0 +1,92 @@
+# Continuous integration — lint + test on every push and PR.
+#
+# Two jobs run in parallel:
+#   * lint  — ruff check + ruff format --check (no DB needed)
+#   * test  — pytest against a Postgres service container; Redis is
+#             stubbed by fakeredis in tests/conftest.py so no Redis
+#             service is required.
+#
+# Both jobs use uv for dependency resolution (the same tool the project
+# uses locally) — fast cold-cache installs, fully reproducible from
+# uv.lock.
+#
+# Once this workflow has run at least once on a branch, the job names
+# `lint` and `test` become selectable in your branch-protection ruleset
+# under "Require status checks to pass before merging".
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+
+    # Postgres service container. Matches the docker-compose setup so
+    # the conftest's default TEST_DATABASE_URL works without overrides
+    # once we point it at localhost via env below.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: longboxes
+          POSTGRES_PASSWORD: longboxes
+          POSTGRES_DB: longboxes
+        ports:
+          - 5432:5432
+        # Wait until pg_isready returns before starting steps — otherwise
+        # the first conftest connect can race the service startup.
+        options: >-
+          --health-cmd="pg_isready -U longboxes -d longboxes"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # Override the conftest defaults to point at the service container
+      # on localhost (vs. the in-compose ``db`` hostname).
+      TEST_DATABASE_URL: postgresql+asyncpg://longboxes:longboxes@localhost:5432/longboxes_test
+      TEST_DATABASE_URL_ADMIN: postgresql://longboxes:longboxes@localhost:5432/longboxes
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: pytest
+        run: uv run pytest
