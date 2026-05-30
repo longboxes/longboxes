@@ -2,6 +2,7 @@
 
 > A self-hosted comic library that reads your collection by story — not by file.
 
+[![CI](https://github.com/longboxes/longboxes/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/longboxes/longboxes/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ed?logo=docker&logoColor=white)](https://github.com/longboxes/longboxes/pkgs/container/longboxes)
 [![Docs](https://img.shields.io/badge/docs-docs.longboxes.app-brightgreen)](https://docs.longboxes.app)
