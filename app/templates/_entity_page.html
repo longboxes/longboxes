@@ -1,0 +1,65 @@
+{# Shared layout for entity detail pages (volume, arc, issue).
+
+   Extends ``base.html`` and renders the standard two-column entity
+   shell:
+
+     * Header strip (from ``_header.html``).
+     * ``<main>`` with a desktop ``lg:grid`` two-column layout —
+       primary content on the left, sticky 11rem sidebar on the
+       right. Mobile collapses to single-column with the sidebar
+       hidden (the page's hero / pagination chrome already serves
+       the same nav purposes there).
+     * The right sidebar wraps in a ``sticky top-6`` container and
+       opens with a small "On this page" anchor list.
+
+   Pages extend this template and override the three blocks:
+
+     {% block content %}        — everything in the left column
+                                  (hero, about, issues, etc.).
+     {% block sidebar_nav_links %} — the ``<a href="#anchor">`` items
+                                  inside the "On this page" nav.
+                                  Each page knows its own jump
+                                  targets (Issues, About, Credits,
+                                  Characters, etc.) — keep them
+                                  inline rather than threading a
+                                  data structure through.
+     {% block sidebar_extras %}  — blocks BELOW the nav (publisher
+                                  chip, completeness ring, volume
+                                  chip, issue rail, etc.). Use
+                                  ``sidebar_section`` from
+                                  ``_sidebar.html`` to wrap each
+                                  labeled block.
+
+   A page can widen its sidebar by passing a ``sidebar_width`` context
+   variable (any CSS length, e.g. ``"18rem"``); it defaults to the
+   standard ``11rem`` thin rail. The character page widens it to fit
+   its "General Information" card.
+
+   The publisher page does NOT extend this — it's a single-column
+   layout with an icon + CTA hero, structurally distinct enough that
+   sharing the chrome would cost more than it saves. #}
+
+{% extends "base.html" %}
+
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-6xl mx-auto px-6 py-6 lg:grid lg:grid-cols-[minmax(0,1fr)_{{ sidebar_width | default('11rem') }}] lg:gap-8">
+  <div class="space-y-6 min-w-0">
+    {% block content %}{% endblock %}
+  </div>
+
+  <aside class="hidden lg:block">
+    <div class="sticky top-6 space-y-6">
+      <nav class="space-y-1 text-sm">
+        <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">On this page</div>
+        {# ``↑ Top`` is universal — every entity page has one. #}
+        <a href="#" class="block text-slate-600 hover:text-slate-900">↑ Top</a>
+        {% block sidebar_nav_links %}{% endblock %}
+      </nav>
+
+      {% block sidebar_extras %}{% endblock %}
+    </div>
+  </aside>
+</main>
+{% endblock %}

@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Admin &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-3xl mx-auto px-6 py-6 space-y-6">
+  <h1 class="text-2xl font-semibold tracking-tight">Admin</h1>
+
+  {% set qp = request.query_params %}
+  {# Setup-wizard flash messages. The CV-key wizard step lands here on
+     success (``?welcome=1``) or on skip (``?cv_skipped=1``). After
+     the user dismisses these, the "matching disabled" banner below
+     stays put until the key is set. #}
+  {% if qp.get('welcome') %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
+      Welcome to Longboxes — ComicVine API key saved. Any files
+      already scanned are queued; matching resumes within ~60 seconds.
+      Track progress on
+      <a class="underline" href="/admin/health">Library health</a>.
+    </div>
+  {% elif qp.get('cv_skipped') %}
+    <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+      ComicVine API key step skipped. Library scans will run; matching
+      stays disabled until you set a key — paste it under
+      <strong>ComicVine API key</strong> below.
+    </div>
+  {% endif %}
+
+  {# Persistent gate banner. Stays visible across reloads (independent
+     of query-param flash messages above) until ``cv_key_configured``
+     becomes True. Reinforces the message every time the admin lands
+     here, in case the wizard skip was a "later" not a "never". #}
+  {% if not cv_key_configured %}
+    <div class="rounded-md bg-amber-50 border border-amber-300 px-4 py-3 text-sm text-amber-900 flex items-start gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 shrink-0 mt-0.5" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+      </svg>
+      <div class="min-w-0">
+        <div class="font-medium">Matching is disabled.</div>
+        <div class="mt-0.5">
+          Longboxes needs a ComicVine API key to identify your comics. Paste it under
+          <a href="#cv-key" class="underline font-medium hover:no-underline">
+            ComicVine API key
+          </a> below — we'll validate it and start matching what the
+          scanner has already registered.
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if qp.get('rescan') == 'queued' %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">Scan queued. Watch worker logs for progress.</div>
+  {% endif %}
+  {% if qp.get('match_all_queued') and not qp.get('welcome') %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">Queued {{ qp.get('match_all_queued') }} match job(s). Track results on <a class="underline" href="/admin/health">Library health</a>.</div>
+  {% endif %}
+  {% if qp.get('cv_key') == 'saved' %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
+      ComicVine API key saved. Any held match jobs resume within
+      ~60 seconds.
+    </div>
+  {% elif qp.get('cv_key') == 'empty' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">Key cannot be empty.</div>
+  {% elif qp.get('cv_key') == 'invalid' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">
+      ComicVine rejected the key. Double-check the value on your ComicVine account's API page.
+    </div>
+  {% endif %}
+  {% if qp.get('volume_added') %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">Added / refreshed volume <code>{{ qp.get('volume_added') }}</code>.</div>
+  {% elif qp.get('volume_error') == 'no_key' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">ComicVine API key isn't configured yet — set it below.</div>
+  {% elif qp.get('volume_error') == 'invalid_key' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">ComicVine rejected the configured API key. Re-paste it below — typos and copy truncation are the usual causes.</div>
+  {% elif qp.get('volume_error') == 'not_found' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">ComicVine doesn't have a volume with that ID.</div>
+  {% elif qp.get('volume_error') == 'bad_id' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">Volume ID must be an integer.</div>
+  {% elif qp.get('volume_error') == 'cv_error' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">ComicVine request failed ({{ qp.get('detail', 'unknown error') }}). Check worker logs.</div>
+  {% endif %}
+  {% if qp.get('page_size') == 'saved' %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">Page size saved.</div>
+  {% elif qp.get('page_size') == 'bad_value' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">Page size must be a whole number.</div>
+  {% elif qp.get('page_size') == 'out_of_range' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">Page size must be between {{ page_size_min }} and {{ page_size_max }}.</div>
+  {% endif %}
+  {% if qp.get('archive_backend') == 'saved' %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">Archive backend saved. Next scan / match / read uses the new backend.</div>
+  {% elif qp.get('archive_backend') == 'bad_value' %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">Unknown archive backend — pick one of the offered options.</div>
+  {% endif %}
+  {% if qp.get('cache_cleared') %}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
+      CV cache marked stale. Next read on each entity will re-fetch from ComicVine.
+      Refreshed:
+      <strong>{{ qp.get('v', '0') }}</strong> volume{{ "s" if qp.get('v') != "1" else "" }},
+      <strong>{{ qp.get('i', '0') }}</strong> issue{{ "s" if qp.get('i') != "1" else "" }},
+      <strong>{{ qp.get('a', '0') }}</strong> arc{{ "s" if qp.get('a') != "1" else "" }},
+      <strong>{{ qp.get('p', '0') }}</strong> publisher{{ "s" if qp.get('p') != "1" else "" }}.
+    </div>
+  {% endif %}
+
+  <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+    <h2 class="text-lg font-medium">Library</h2>
+    {% if library_paths %}
+      <div>
+        <h3 class="text-sm font-medium text-slate-700 mb-2">Configured paths</h3>
+        <ul class="text-sm font-mono space-y-1">
+          {% for p in library_paths %}<li class="text-slate-700">{{ p }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-600">No library paths configured. Set <code class="text-xs bg-slate-100 px-1 py-0.5 rounded">LIBRARY_PATHS</code> in your environment (comma-separated) and restart the worker to seed.</p>
+    {% endif %}
+    <div class="text-sm text-slate-600">Scan interval: every <strong>{{ scan_interval_seconds }}</strong> seconds (set via app_settings).</div>
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="/admin/rescan">
+        <button
+          type="submit"
+          {% if not library_paths %}disabled{% endif %}
+          class="rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">Rescan now</button>
+      </form>
+      <form method="post" action="/admin/match-all">
+        <button
+          type="submit"
+          class="rounded-md border border-slate-300 text-sm font-medium px-3 py-2 hover:bg-slate-100">Match all unmatched</button>
+      </form>
+      <a href="/admin/health" class="rounded-md border border-slate-300 text-sm font-medium px-3 py-2 hover:bg-slate-100">Library health</a>
+    </div>
+  </section>
+
+  <section id="cv-key" class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+    <h2 class="text-lg font-medium">ComicVine API key</h2>
+    <p class="text-sm text-slate-600">
+      Required to fetch any metadata. Get one (free, takes a minute) at
+      <a class="underline" href="https://comicvine.gamespot.com/api/" target="_blank" rel="noopener">comicvine.gamespot.com/api</a>.
+      Current: <span class="font-mono text-sm">{{ cv_key_display }}</span>
+    </p>
+    <form method="post" action="/admin/cv-key" class="flex gap-2">
+      <input
+        type="password" name="api_key" required autocomplete="off"
+        placeholder="paste API key"
+        class="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none font-mono">
+      <button
+        type="submit"
+        class="rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2 hover:bg-slate-800">Save</button>
+    </form>
+  </section>
+
+  <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+    <h2 class="text-lg font-medium">Browse settings</h2>
+    <p class="text-sm text-slate-600">
+      Page size controls the initial pagination window shared by the library, publisher arcs, volume issues, and arc issues.
+      Currently <strong class="font-mono">{{ page_size }}</strong> (default {{ page_size_default }}). Range: {{ page_size_min }}–{{ page_size_max }}.
+      Smaller values keep CV-rate-limit pressure low; larger values reduce "Load more" clicks at the cost of bigger initial hydration bursts.
+    </p>
+    <form method="post" action="/admin/page-size" class="flex gap-2">
+      <input
+        type="number" name="page_size" required
+        value="{{ page_size }}"
+        min="{{ page_size_min }}" max="{{ page_size_max }}" step="1"
+        class="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none font-mono">
+      <button type="submit" class="rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2 hover:bg-slate-800">Save</button>
+    </form>
+  </section>
+
+  <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+    <h2 class="text-lg font-medium">Archive backend</h2>
+    <p class="text-sm text-slate-600">
+      Which library reads CBZ / CBR / CBT / PDF files. <strong>comicbox</strong> (default)
+      uses the third-party comicbox library — broader format support, proper page sort order,
+      MetronInfo metadata extraction, and per-page metadata (double-page spreads, cover detection,
+      skip-ads). <strong>stdlib</strong> falls back to the original zipfile / rarfile readers —
+      narrower support but no extra dependencies. Switch if comicbox surprises you on a specific
+      archive; the change is immediate (next scan / match / page view).
+    </p>
+    <form method="post" action="/admin/archive-backend" class="flex gap-2 items-center">
+      <select name="backend" class="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+        {% for b in archive_backends %}
+          <option value="{{ b }}" {% if b == archive_backend %}selected{% endif %}>{{ b }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2 hover:bg-slate-800">Save</button>
+    </form>
+  </section>
+
+  <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+    <h2 class="text-lg font-medium">ComicVine cache</h2>
+    <p class="text-sm text-slate-600">
+      Marks every cached CV entity stale so the next page view triggers a fresh fetch from ComicVine.
+      Data isn't deleted — file matches and your library stay intact — but covers, descriptions, and arc credits will refresh through the background worker as the rate limiter allows.
+      Use this when CV has updated upstream and you want the app to pick up the changes without waiting for the TTL to expire.
+    </p>
+    <form method="post" action="/admin/cache/clear"
+          onsubmit="return confirm('Mark every cached CV entity stale? Pages will gradually refresh on next view.');">
+      <button type="submit" class="rounded-md border border-slate-300 text-sm font-medium px-3 py-2 hover:bg-slate-100">Clear cache</button>
+    </form>
+  </section>
+
+  <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+    <h2 class="text-lg font-medium">Add a volume</h2>
+    <p class="text-sm text-slate-600">
+      Paste a ComicVine volume ID (the integer in <code class="text-xs bg-slate-100 px-1 py-0.5 rounded">comicvine.gamespot.com/<wbr>volume/<wbr>4050-<strong>12345</strong>/</code>).
+      We'll fetch the volume + its issue list, stub-cache each issue, and persist.
+    </p>
+    <form method="post" action="/admin/volume" class="flex gap-2">
+      <input
+        type="text" name="cv_id" required inputmode="numeric" pattern="[0-9]+"
+        placeholder="e.g. 18166"
+        {% if not cv_key_configured %}disabled{% endif %}
+        class="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none font-mono disabled:bg-slate-100">
+      <button
+        type="submit"
+        {% if not cv_key_configured %}disabled{% endif %}
+        class="rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Add</button>
+    </form>
+    {% if not cv_key_configured %}
+      <p class="text-xs text-slate-500">Set the API key above first.</p>
+    {% endif %}
+  </section>
+
+  {% if recent_volumes %}
+    <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+      <h2 class="text-lg font-medium">Recently fetched volumes</h2>
+      <table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-slate-500">
+          <tr><th class="py-1">CV ID</th><th class="py-1">Name</th><th class="py-1">Year</th><th class="py-1">#issues</th><th class="py-1">Fetched</th></tr>
+        </thead>
+        <tbody>
+          {% for v in recent_volumes %}
+            <tr class="border-t border-slate-100">
+              <td class="py-1 font-mono">{{ v.cv_id }}</td>
+              <td class="py-1">{{ v.name }}</td>
+              <td class="py-1">{{ v.year or "—" }}</td>
+              <td class="py-1">{{ v.count_of_issues or "—" }}</td>
+              <td class="py-1 text-slate-500">{{ v.fetched_at.strftime("%Y-%m-%d %H:%M") }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

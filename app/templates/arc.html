@@ -1,0 +1,233 @@
+{% extends "_entity_page.html" %}
+{% from "_wiki_card.html" import wiki_about_block %}
+{% from "_cv_badge.html" import cv_badge %}
+{% from "_progress_ring.html" import progress_ring %}
+{% from "_publisher_chip.html" import publisher_chip %}
+{% from "_arc_macros.html" import arc_issue_row %}
+{% from "_issue_card.html" import issue_cover_card %}
+{% from "_entity_hero.html" import entity_hero %}
+{% from "_sidebar.html" import sidebar_section, sidebar_nav_link, mobile_meta_row %}
+{% from "_pagination.html" import view_toggle, pagination_count_label, load_earlier_button, load_more_buttons %}
+{% from "_hydration_toast.html" import hydration_toast %}
+{% from "_format_macros.html" import format_badge %}
+{% block title %}{{ detail.name }} &middot; Longboxes{% endblock %}
+
+{% block content %}
+
+  {% call(meta_class, subtle_class, is_banner) entity_hero(
+      title=detail.name,
+      banner_url=detail.banner_url,
+      cover_url=detail.cover_url,
+      cover_alt=detail.name ~ ' cover',
+      cv_site_url=(detail.arc.raw_payload or {}).get('site_detail_url'),
+      breadcrumbs=[{"label": "Library", "href": "/library"}],
+      deck=detail.deck
+  ) %}
+    {% if detail.primary_book %}
+      <div class="text-sm {{ meta_class }}">from {{ detail.primary_book }}</div>
+    {% endif %}
+    <div class="text-sm {{ meta_class }}">
+      <span class="font-medium">{{ detail.owned_count }}</span>
+      / <span>{{ detail.total_count }}</span> issues owned
+      {# Volume count only shown in the no-banner layout — the
+         banner hero's vertical real estate is already crowded
+         with title + meta + deck. #}
+      {% if not is_banner %}
+        <span class="{{ subtle_class }}"> &middot; </span>
+        {{ detail.volume_shelves|length }} volume{{ "s" if detail.volume_shelves|length != 1 else "" }}
+      {% endif %}
+    </div>
+  {% endcall %}
+
+  {# Mobile completeness + publisher — the sidebar that carries these
+     on lg+ is hidden below lg. #}
+  {{ mobile_meta_row(publisher, detail.owned_count, detail.total_count) }}
+
+  {{ wiki_about_block(
+       detail.description,
+       banner_url=detail.banner_url,
+       breadcrumbs=[{"label": "Library", "href": "/library"}]
+  ) }}
+
+  {# Flat list of issue CV IDs in arc reading order — Alpine slices
+     this on each pagination expansion to POST newly-visible issues
+     to /hydrate-issues, matching the volume page's pattern. #}
+  {% set ids_csv = detail.issues | map(attribute='cv_id') | join(',') %}
+
+  <section id="issues"
+           x-on:auto-refresh-complete="refreshViews()"
+           x-data="{
+             ...setupAutoRefresh({ endpoint: '/arc/{{ detail.arc.cv_id }}/issues/hydration' }),
+             ...setupPagination({
+               pageSize: {{ page_size }},
+               total: {{ detail.total_count }},
+               issueIds: [{{ ids_csv }}],
+               hydrateEndpoint: '/arc/{{ detail.arc.cv_id }}/hydrate-issues'
+             }),
+             view: '{{ view }}',
+             init() {
+               {# Server-scoped to the initial PAGE_SIZE window —
+                  hand straight to the helper rather than DOM-scan.
+                  ``hydrateRange`` extends the set as the user
+                  reveals more rows via pagination. #}
+               this.pendingIds = new Set([{{ pending_issue_ids | join(', ') }}]);
+               this._arSyncPendingCount();
+               if (this.pendingIds.size > 0) {
+                 this._arStartPolling();
+               }
+             },
+             {# Fired by ``setupAutoRefresh`` once every pending issue
+                has been hydrated and swapped in. Per-row swaps cover
+                the common case (each row's ``<tr>`` / ``<a>`` carries
+                a unique id), but a full re-fetch catches anything the
+                per-element path can't reach — header counters, per-
+                shelf summaries, or the no-banner cover hero if the
+                arc itself was what just hydrated.
+
+                Mirrors the volume page's ``refreshViews()``: fetch
+                the current URL, parse, replace the two view
+                containers by id. Alpine's mutation observer
+                reprocesses the swapped-in markup; the section's
+                x-data (view, pagination state) stays put. #}
+             async refreshViews() {
+               try {
+                 const res = await fetch(window.location.href, {
+                   headers: {'X-Auto-Refresh': '1'},
+                 });
+                 if (!res.ok) return;
+                 const html = await res.text();
+                 const wrap = document.createElement('div');
+                 wrap.innerHTML = html;
+                 for (const viewId of ['arc-view-list', 'arc-view-gallery']) {
+                   const oldEl = document.getElementById(viewId);
+                   const newEl = wrap.querySelector('#' + viewId);
+                   if (oldEl && newEl) oldEl.replaceWith(newEl);
+                 }
+               } catch (e) { /* swallow — leaves the per-row swaps visible */ }
+             }
+           }">
+    <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+      <div class="flex items-baseline gap-3">
+        <h2 class="text-lg font-medium">Issues</h2>
+        {{ pagination_count_label(item_label='issue', suffix='in arc reading order') }}
+      </div>
+      {# Two-view toggle — no "Arcs" mode here since we ARE the arc. #}
+      {{ view_toggle([
+        {"key": "list",    "label": "List"},
+        {"key": "gallery", "label": "Gallery"},
+      ]) }}
+    </div>
+
+    {# "Load earlier" — shared by both views. Mirrors the volume
+       page's load-earlier control. #}
+    {{ load_earlier_button() }}
+
+    {# ---- List view ---- #}
+    {# Flat table of every arc member in arc-reading order. Volume
+       column links back to /volume/<id> so users can jump from "this
+       arc visits volume X in issue #15" to volume X's full issue
+       list. Pagination scoped to PAGE_SIZE rows; each ``<tr>`` has
+       an ``x-show`` against the window in the macro. #}
+    <div id="arc-view-list" x-show="view === 'list'">
+      <table class="w-full text-sm bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <thead class="text-left text-xs uppercase text-slate-500 bg-slate-50">
+          <tr>
+            <th class="py-2 px-3 w-14"></th>
+            <th class="py-2 px-3">#</th>
+            <th class="py-2 px-3">Name</th>
+            <th class="py-2 px-3">Volume</th>
+            <th class="py-2 px-3 text-right">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for i in detail.issues %}
+            {{ arc_issue_row(i) }}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# ---- Gallery view ---- #}
+    {# One shelf per volume the arc touches. Shelves render in the
+       order each volume first appears in arc-reading order
+       (preserved by the service layer's dict insertion). Inside each
+       shelf, issues stay in arc-reading order — so a volume the arc
+       visits twice (once early, once later) will have its early and
+       late issues clustered in their own shelf, which mirrors the
+       volume page's gap-aware segment splitting. #}
+    <div id="arc-view-gallery" x-show="view === 'gallery'" x-cloak class="space-y-4">
+      {% for shelf in detail.volume_shelves %}
+        {# A shelf renders whenever its arc-reading-order range
+           overlaps the current pagination window. Once visible,
+           ALL its covers render — keeps the volume's contribution
+           legible as one unit rather than fragmented across page
+           boundaries. #}
+        <section x-show="{{ shelf.min_arc_idx }} < start + count && {{ shelf.max_arc_idx }} >= start" x-cloak>
+          <div class="flex items-center gap-2 mb-1.5">
+            {% if shelf.volume_cv_id %}
+              {# Anchor to the first issue of this volume in arc
+                 reading order — the shelf's natural entry point.
+                 ``shelf.issues`` preserves arc reading order so
+                 ``[0]`` is the earliest in-arc issue from that
+                 volume. #}
+              <a href="/volume/{{ shelf.volume_cv_id }}?from={{ shelf.issues[0].cv_id }}" class="text-sm font-medium text-slate-800 hover:underline">{{ shelf.volume_name }}</a>
+            {% else %}
+              <span class="text-sm font-medium text-slate-800">{{ shelf.volume_name }}</span>
+            {% endif %}
+            {% if shelf.volume_year %}
+              <span class="text-xs text-slate-400">({{ shelf.volume_year }})</span>
+            {% endif %}
+            {{ format_badge(shelf.format) }}
+            <span class="text-xs text-slate-500">
+              {{ shelf.issues|length }} issue{{ "s" if shelf.issues|length != 1 else "" }}
+            </span>
+          </div>
+          <ul class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 p-2 rounded-lg bg-slate-50">
+            {% for i in shelf.issues %}
+              <li>{{ issue_cover_card(i, dom_id='arc-gallery-' ~ i.cv_id) }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endfor %}
+    </div>
+
+    {# "Load more" / "Show all" — shared by both views, only
+       rendered when the window doesn't already reach the end. #}
+    {{ load_more_buttons() }}
+
+    {# Live countdown toast — fixed bottom-right, shows while
+       background hydration is draining the arc's pending set.
+       Each pending entry is one per-issue fetch (covers + names
+       + arc credits across the arc's member volumes). #}
+    {{ hydration_toast(label='issue') }}
+  </section>
+{% endblock %}
+
+{% block sidebar_nav_links %}
+  {% if detail.description %}
+    {{ sidebar_nav_link("#about", "About") }}
+  {% endif %}
+  {{ sidebar_nav_link("#issues", "Issues") }}
+{% endblock %}
+
+{% block sidebar_extras %}
+  {# Publisher chip — the dominant publisher across the arc's
+     volumes (computed in the route). Most arcs are single-publisher;
+     cross-publisher crossovers pick whichever has more volumes in
+     our cache. The macro short-circuits to nothing if publisher is
+     None. #}
+  {% if publisher %}
+    {% call sidebar_section("Publisher") %}
+      {{ publisher_chip(publisher) }}
+    {% endcall %}
+  {% endif %}
+
+  {# Completeness ring — owned vs total arc issues, same widget
+     the volume sidebar uses. Arc total here is CV-reported, not
+     per-volume. #}
+  {% if detail.total_count %}
+    {% call sidebar_section("Completeness") %}
+      {{ progress_ring(detail.owned_count, detail.total_count) }}
+    {% endcall %}
+  {% endif %}
+{% endblock %}

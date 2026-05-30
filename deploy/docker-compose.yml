@@ -1,0 +1,174 @@
+# Longboxes — distribution deployment.
+#
+#   1. cp .env.example .env
+#   2. edit .env — set LIBRARY_PATH to your comic library
+#   3. docker compose up -d
+#   4. open http://localhost:8612/  (create the admin account, then
+#      paste your ComicVine API key under Admin → settings)
+#
+# Seven services: web (UI + API), worker (match-lane background jobs),
+# worker-interactive (browse-triggered hydration on its own lane so a
+# heavy match run can't lag the UI), worker-scan (the recurring
+# library scan, also isolated so a slow walk doesn't park hydration
+# jobs behind it), scheduler (cron for the scan), db (Postgres),
+# redis (job broker). web and the three worker services run the
+# same published image; db and redis are stock images. Everything user-facing lives in .env — database
+# credentials and internal service URLs are wired up here and never
+# need touching. db and redis are reachable only on the internal
+# network; they expose no host ports.
+name: longboxes
+
+services:
+  web:
+    image: ghcr.io/longboxes/longboxes:latest
+    restart: unless-stopped
+    # Apply any pending DB migrations, then serve. Only web migrates —
+    # worker waits for web to be healthy — so there's no migration race.
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8080
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TZ:-UTC}
+      # Seeds app_settings.library_paths on first boot to the fixed
+      # in-container mount below; editable afterward in the admin UI.
+      LIBRARY_PATHS: /library
+      # Leave false on plain http; set true only behind an HTTPS proxy.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+    ports:
+      - "${WEB_PORT:-8612}:8080"
+    volumes:
+      # Your comic library, read-only. LIBRARY_PATH is the host path.
+      - "${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # Generous — covers first-boot migrations on a fresh database.
+      start_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Match worker — drains the ``default`` queue (match_file jobs and
+  # the volume_issues bulk hydrations they spawn). Parallelism is set
+  # via the ``MATCH_WORKER_REPLICAS`` env var (default 1; set higher
+  # in ``.env`` for faster initial imports). The shared
+  # RedisRatePacer keeps the total CV call rate inside ComicVine's
+  # per-resource budgets regardless of replica count — more workers
+  # buys lower per-call wait time, not more total CV throughput.
+  worker:
+    image: ghcr.io/longboxes/longboxes:latest
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    deploy:
+      replicas: ${MATCH_WORKER_REPLICAS:-1}
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TZ:-UTC}
+      WORKER_QUEUES: default
+      LIBRARY_PATHS: /library
+    volumes:
+      - "${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      # web owns the migration step — wait until it's up and healthy.
+      web:
+        condition: service_healthy
+
+  # Interactive worker — drains the ``interactive`` queue only
+  # (browse-page hydration: stub volumes, character / creator / team /
+  # arc revalidates, scrapes, manual fix-match flows). On its own
+  # process so a long-running scan can't park hydration jobs behind
+  # it — RQ workers don't preempt, so sharing one process would mean
+  # browse-triggered jobs stall for the duration of any scan.
+  worker-interactive:
+    image: ghcr.io/longboxes/longboxes:latest
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TZ:-UTC}
+      WORKER_QUEUES: interactive
+      LIBRARY_PATHS: /library
+    volumes:
+      - "${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      web:
+        condition: service_healthy
+
+  # Scan worker — drains the ``scan`` queue (recurring library scan
+  # plus admin "Rescan"). Owns the rq-scheduler recurring-job
+  # registration; the worker entrypoint gates that on ``scan`` being
+  # in WORKER_QUEUES.
+  worker-scan:
+    image: ghcr.io/longboxes/longboxes:latest
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TZ:-UTC}
+      WORKER_QUEUES: scan
+      LIBRARY_PATHS: /library
+    volumes:
+      - "${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      web:
+        condition: service_healthy
+
+  scheduler:
+    image: ghcr.io/longboxes/longboxes:latest
+    restart: unless-stopped
+    # rq-scheduler daemon — fires the recurring library scan the worker
+    # registers on startup.
+    command: ["rqscheduler", "--url", "redis://redis:6379/0", "-i", "30"]
+    environment:
+      TZ: ${TZ:-UTC}
+    depends_on:
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: longboxes
+      POSTGRES_PASSWORD: longboxes
+      POSTGRES_DB: longboxes
+      TZ: ${TZ:-UTC}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U longboxes -d longboxes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

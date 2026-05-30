@@ -1,0 +1,25 @@
+{# The alphabet jump-bar macro — a longbox-tab-divider row of A-Z (+ "#")
+   letter filters, shared by the paginated entity-card and volume-credit
+   lists (``_character_people.html``, ``_volume_credits.html``). #}
+
+{# ``active`` is the current letter (A-Z / "#") or None; ``param`` is
+   the query param the links set ("letter" / "cletter" / "aletter" /
+   "vletter"); ``anchor`` is the section id to re-anchor to. "All" drops
+   the filter. The active tab is raised + white. #}
+{% macro credit_alphabet(active, param, anchor) %}
+  {% set tab_base = "text-center text-xs rounded-t-md border sm:border-b-0 transition-colors select-none" %}
+  {% set tab_active = "bg-white text-slate-900 font-semibold border-slate-300 shadow-sm relative z-10 py-3" %}
+  {% set tab_idle = "bg-slate-100 text-slate-400 font-medium border-slate-200 hover:bg-slate-50 hover:text-slate-600 py-2" %}
+  <nav class="grid grid-cols-[repeat(10,minmax(0,1fr))] sm:grid-cols-[repeat(28,minmax(0,1fr))] items-end gap-x-px gap-y-2 sm:border-b sm:border-slate-200"
+       aria-label="Filter by first letter">
+    <a href="?#{{ anchor }}"
+       class="{{ tab_base }} {{ tab_active if not active else tab_idle }}">All</a>
+    {% for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" %}
+      <a href="?{{ param }}={{ letter }}#{{ anchor }}"
+         class="{{ tab_base }} {{ tab_active if active == letter else tab_idle }}">{{ letter }}</a>
+    {% endfor %}
+    <a href="?{{ param }}=%23#{{ anchor }}"
+       class="{{ tab_base }} {{ tab_active if active == '#' else tab_idle }}"
+       title="Starting with a number or symbol">#</a>
+  </nav>
+{% endmacro %}

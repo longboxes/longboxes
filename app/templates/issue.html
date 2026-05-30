@@ -1,0 +1,424 @@
+{% extends "_entity_page.html" %}
+{% from "_wiki_card.html" import wiki_about_block %}
+{% from "_publisher_chip.html" import publisher_chip %}
+{% from "_volume_chip.html" import volume_chip %}
+{% from "_cv_badge.html" import cv_badge %}
+{% from "_issue_rail.html" import issue_rail %}
+{% from "_entity_hero.html" import entity_hero %}
+{% from "_progress_bar.html" import progress_bar %}
+{% from "_sidebar.html" import sidebar_section, sidebar_nav_link, mobile_meta_row %}
+{% block title %}{{ detail.issue.name or "#" ~ (detail.issue.issue_number or "?") }} &middot; Longboxes{% endblock %}
+{% block content %}
+
+  {# The first file on disk for this issue, if any. When set, the hero
+     cover is a link into the reader (Phase 6); a missing issue has no
+     files, so it simply has no link. #}
+  {% set read_file = detail.matched_files[0] if detail.matched_files else none %}
+
+  {% if detail.banner_url %}
+    {# Hero with cover overlaid on the banner (left, full hero height),
+       text content overlaid to the right. When the issue has a file on
+       disk the cover links into the reader. Breadcrumb sits below the
+       hero so the banner gets the full vertical real estate. #}
+    <section class="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-900 h-72 md:h-96">
+      {# object-top pins the top of the banner image — see volume.html. #}
+      <img src="{{ detail.banner_url }}" alt="" class="absolute inset-0 w-full h-full object-cover object-top">
+      {# Cover sits at the far left; text content runs across the rest of
+         the hero. Gradient is dark on BOTH ends with a softer middle so
+         the cover has good contrast and the right-side text stays legible
+         regardless of how busy the banner art is. #}
+      <div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/50 to-slate-900/90"></div>
+      {# CV attribution badge — top-right of the banner, click-out to
+         the canonical ComicVine page for this issue. #}
+      <div class="absolute top-3 right-3 z-10">
+        {{ cv_badge((detail.issue.raw_payload or {}).get('site_detail_url')) }}
+      </div>
+      <div class="relative h-full flex items-stretch gap-5 p-5 text-white">
+        {# Cover: full hero height, 2:3 aspect inferred from the height.
+           Missing issues (no auto/confirmed FileMatch) dim the cover
+           image to 40% so the hero visibly conveys "you don't have
+           this one yet" alongside the unchanged title/metadata. #}
+        <div class="group relative h-full shrink-0 rounded-md overflow-hidden border border-white/20 bg-slate-800" style="aspect-ratio: 2 / 3;"
+             title="{% if not detail.owned %}Not in your library{% endif %}">
+          {% if detail.cover_url %}
+            <img src="{{ detail.cover_url }}" alt="cover"
+                 class="w-full h-full object-cover transition-opacity {% if not detail.owned %}opacity-40 group-hover:opacity-100{% endif %}">
+          {% else %}
+            <div class="w-full h-full flex items-center justify-center text-xs opacity-60">no cover</div>
+          {% endif %}
+          {% if not detail.owned %}
+            {# Subtle "missing" tag pinned to the cover corner. Stays
+               readable even with the image dimmed to 40%. #}
+            <span class="absolute top-1.5 left-1.5 inline-block rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-medium text-white/90">
+              Missing
+            </span>
+          {% endif %}
+          {% if read_file %}
+            {# Cover → reader. A stretched overlay link makes the whole
+               cover the click target without disturbing the group /
+               missing-tag layers beneath it. #}
+            <a href="/read/{{ read_file.file_id }}"
+               class="absolute inset-0 z-10"
+               aria-label="Read this issue" title="Read"></a>
+          {% endif %}
+          {# Reading-progress bar along the cover's bottom edge. #}
+          {{ progress_bar(reading_progress) }}
+        </div>
+        <div class="flex-1 min-w-0 flex flex-col justify-end gap-1">
+          {# ``line-clamp-2`` caps the title at two lines — a long
+             issue name can't balloon the bottom-aligned hero content
+             and clip itself off the top of the banner. #}
+          <h1 class="text-2xl md:text-3xl font-semibold tracking-tight drop-shadow line-clamp-2">
+            {% if detail.issue.issue_number %}<span class="opacity-70 font-mono">#{{ detail.issue.issue_number }}</span>{% endif %}
+            {% if detail.issue.name %}{{ detail.issue.name }}{% endif %}
+          </h1>
+          {% if detail.volume %}
+            <div class="text-sm opacity-90">
+              <a class="hover:underline" href="/volume/{{ detail.volume.cv_id }}?from={{ detail.issue.cv_id }}">{{ detail.volume.name }}</a>
+              {% if detail.volume.year %}({{ detail.volume.year }}){% endif %}
+              {% if detail.publisher_name %}<span class="opacity-60"> · </span>{{ detail.publisher_name }}{% endif %}
+            </div>
+          {% endif %}
+          {% if detail.issue.cover_date %}
+            <div class="text-sm opacity-75">Cover date: {{ detail.issue.cover_date }}</div>
+          {% endif %}
+          {% if detail.deck %}
+            {# CV's ``deck`` field — a one-line summary that sits in
+               the header. The long-form wiki description renders in
+               the about section below. #}
+            <div class="text-sm italic opacity-80 max-w-xl">{{ detail.deck }}</div>
+          {% endif %}
+          {# Story arcs as small pills. Each is a link to the eventual
+             arc detail page; styled translucent so they sit nicely on
+             the banner without competing with the title. #}
+          {% if detail.story_arcs %}
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              {% for a in detail.story_arcs %}
+                {# Pill label is the cleaned arc name; ``primary_book``
+                   (parsed from CV's ``"<book>" <arc>`` convention)
+                   rides along in the tooltip so the parent context
+                   is one hover away.
+
+                   Background is the per-arc 500/600-tier color so
+                   the pill matches its rail branch color in the
+                   sidebar — one glance ties pill ↔ rail line. White
+                   text gives reliable contrast across the palette.
+                   Glassmorphic ``bg-white/15`` is gone since the
+                   saturated bg already pops against the banner. #}
+                <a href="/arc/{{ a.cv_id }}"
+                   class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white hover:opacity-80 transition-opacity {{ detail.arc_pill_bg_color_classes.get(a.cv_id) }}"
+                   title="{{ a.name }}{% if a.primary_book %} ({{ a.primary_book }}){% endif %}">{{ a.name }}</a>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {# Neighbor links rendered as thumbnails (w-12 → 48×72 at 2:3).
+             White border for contrast against the dark hero background.
+             ``lg:hidden`` because the sidebar issue rail (lg+ only)
+             takes over volume-order navigation on desktop — keeping
+             both would duplicate the prev/next thumbs. Mobile / tablet
+             below lg still rely on these since the sidebar is collapsed
+             there. #}
+          <div class="flex items-center gap-3 pt-2 lg:hidden">
+            {% if detail.prev_neighbor %}
+              {% set pn = detail.prev_neighbor %}
+              <a href="/issue/{{ pn.cv_id }}"
+                 title="Previous: #{{ pn.issue_number or '?' }} {{ pn.name or '' }}"
+                 class="group flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
+                <span class="text-sm">←</span>
+                <span class="block w-12 rounded overflow-hidden border border-white/30 bg-slate-800" style="aspect-ratio: 2 / 3;">
+                  {% if pn.cover_url %}
+                    <img src="{{ pn.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+                  {% endif %}
+                </span>
+              </a>
+            {% endif %}
+            {% if detail.next_neighbor %}
+              {% set nn = detail.next_neighbor %}
+              <a href="/issue/{{ nn.cv_id }}"
+                 title="Next: #{{ nn.issue_number or '?' }} {{ nn.name or '' }}"
+                 class="group flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
+                <span class="block w-12 rounded overflow-hidden border border-white/30 bg-slate-800" style="aspect-ratio: 2 / 3;">
+                  {% if nn.cover_url %}
+                    <img src="{{ nn.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+                  {% endif %}
+                </span>
+                <span class="text-sm">→</span>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+  {% else %}
+    {# No banner → use the shared ``entity_hero`` macro. Builds the
+       title with the #N prefix as inline HTML (passed via |safe in
+       the macro) and supplies the two-segment breadcrumb. Arc pills
+       and mobile prev/next thumbs are page-specific chrome rendered
+       inside the call block, where they sit after the deck (which
+       the macro emits for us). #}
+    {% set title_html %}
+      {% if detail.issue.issue_number %}<span class="text-slate-500 font-mono">#{{ detail.issue.issue_number }}</span>{% endif %}
+      {% if detail.issue.name %}{{ detail.issue.name }}{% endif %}
+    {% endset %}
+    {% set crumbs = [{"label": "Library", "href": "/library"}] %}
+    {% if detail.volume %}
+      {% set crumbs = crumbs + [{"label": detail.volume.name, "href": "/volume/" ~ detail.volume.cv_id ~ "?from=" ~ detail.issue.cv_id}] %}
+    {% endif %}
+    {% call(meta_class, subtle_class, is_banner) entity_hero(
+        title=title_html,
+        cover_url=detail.cover_url,
+        cover_alt='cover',
+        cover_missing=(not detail.owned),
+        cover_w='w-48',
+        cover_href=('/read/' ~ read_file.file_id) if read_file else none,
+        cover_progress=reading_progress,
+        breadcrumbs=crumbs,
+        deck=detail.deck
+    ) %}
+        {% if detail.volume %}
+          <div class="text-sm {{ meta_class }}">
+            <a class="hover:underline" href="/volume/{{ detail.volume.cv_id }}?from={{ detail.issue.cv_id }}">{{ detail.volume.name }}</a>
+            {% if detail.volume.year %}({{ detail.volume.year }}){% endif %}
+            {% if detail.publisher_name %}<span class="{{ subtle_class }}"> · </span>{{ detail.publisher_name }}{% endif %}
+          </div>
+        {% endif %}
+        {% if detail.issue.cover_date %}
+          <div class="text-sm {{ subtle_class }}">Cover date: {{ detail.issue.cover_date }}</div>
+        {% endif %}
+        {# Story arc pills — light-background variant to match the
+           no-banner hero. Same content, same /arc/ links as the
+           banner hero above. The pill bg color comes from the
+           per-arc palette so it matches the rail/legend treatment. #}
+        {% if detail.story_arcs %}
+          <div class="flex flex-wrap gap-1.5 pt-1">
+            {% for a in detail.story_arcs %}
+              <a href="/arc/{{ a.cv_id }}"
+                 class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white hover:opacity-80 transition-opacity {{ detail.arc_pill_bg_color_classes.get(a.cv_id) }}"
+                 title="{{ a.name }}{% if a.primary_book %} ({{ a.primary_book }}){% endif %}">{{ a.name }}</a>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {# Mobile/tablet-only prev/next thumbnails — superseded by the
+           sidebar issue rail on lg+ where both would otherwise show
+           the same nav twice. #}
+        <div class="flex items-center gap-3 pt-2 lg:hidden">
+          {% if detail.prev_neighbor %}
+            {% set pn = detail.prev_neighbor %}
+            <a href="/issue/{{ pn.cv_id }}"
+               title="Previous: #{{ pn.issue_number or '?' }} {{ pn.name or '' }}"
+               class="group flex items-center gap-2 text-slate-600 hover:text-slate-900">
+              <span class="text-sm">←</span>
+              <span class="block w-20 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+                {% if pn.cover_url %}
+                  <img src="{{ pn.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+                {% endif %}
+              </span>
+            </a>
+          {% endif %}
+          {% if detail.next_neighbor %}
+            {% set nn = detail.next_neighbor %}
+            <a href="/issue/{{ nn.cv_id }}"
+               title="Next: #{{ nn.issue_number or '?' }} {{ nn.name or '' }}"
+               class="group flex items-center gap-2 text-slate-600 hover:text-slate-900">
+              <span class="block w-20 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+                {% if nn.cover_url %}
+                  <img src="{{ nn.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+                {% endif %}
+              </span>
+              <span class="text-sm">→</span>
+            </a>
+          {% endif %}
+        </div>
+    {% endcall %}
+  {% endif %}
+
+  {# Mobile publisher chip — the sidebar that carries it on lg+ is
+     hidden below lg. No completeness: a single issue has none. #}
+  {{ mobile_meta_row(publisher) }}
+
+  {% set about_crumbs = [{"label": "Library", "href": "/library"}] %}
+  {% if detail.volume %}
+    {% set about_crumbs = about_crumbs + [{
+        "label": detail.volume.name,
+        "href": "/volume/" ~ detail.volume.cv_id ~ "?from=" ~ detail.issue.cv_id
+    }] %}
+  {% endif %}
+  {{ wiki_about_block(
+       detail.description,
+       banner_url=detail.banner_url,
+       breadcrumbs=about_crumbs
+  ) }}
+
+  <div class="grid md:grid-cols-2 gap-4">
+    {% if detail.persons %}
+      <section id="credits" class="bg-white border border-slate-200 rounded-lg p-4">
+        <h2 class="text-sm font-medium text-slate-700 mb-2">Credits</h2>
+        <ul class="text-sm space-y-1">
+          {% for c in detail.persons %}
+            <li>
+              <a href="/creator/{{ c.cv_id }}" class="text-slate-900 hover:underline">{{ c.name }}</a>
+              {% if c.role %}<span class="text-slate-500"> — {{ c.role }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    {% if detail.characters %}
+      <section id="characters" class="bg-white border border-slate-200 rounded-lg p-4">
+        <h2 class="text-sm font-medium text-slate-700 mb-2">Characters</h2>
+        <ul class="flex flex-wrap gap-1.5">
+          {% for c in detail.characters %}
+            <li>
+              <a href="/character/{{ c.cv_id }}"
+                 class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200">{{ c.name }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    {% if detail.story_arcs %}
+      <section id="arcs" class="bg-white border border-slate-200 rounded-lg p-4">
+        <h2 class="text-sm font-medium text-slate-700 mb-2">Story arcs</h2>
+        <ul class="flex flex-wrap gap-1.5">
+          {% for a in detail.story_arcs %}
+            {# Cleaned arc name; parent book in the title so a hover
+               surfaces the CV ``"<book>"`` namespace when present.
+               Per-arc colored bg matches the same hue as the arc's
+               rail branch in the sidebar (and the hero pills above)
+               so the user can trace pill → rail at a glance. #}
+            <li>
+              <a href="/arc/{{ a.cv_id }}"
+                 class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white hover:opacity-80 transition-opacity {{ detail.arc_pill_bg_color_classes.get(a.cv_id) }}"
+                 title="{{ a.name }}{% if a.primary_book %} ({{ a.primary_book }}){% endif %}">{{ a.name }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    {% if detail.teams %}
+      <section id="teams" class="bg-white border border-slate-200 rounded-lg p-4">
+        <h2 class="text-sm font-medium text-slate-700 mb-2">Teams</h2>
+        <ul class="flex flex-wrap gap-1.5">
+          {% for t in detail.teams %}
+            <li>
+              <a href="/team/{{ t.cv_id }}"
+                 class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200">{{ t.name }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    {% if detail.matched_files %}
+      {% set is_admin = user is defined and user is not none and user.role == "admin" %}
+      <section id="files" class="bg-white border border-slate-200 rounded-lg p-4 md:col-span-2">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <h2 class="text-sm font-medium text-slate-700">Files on disk</h2>
+          <div class="flex items-center gap-3">
+            {# Compare button — only when there are multiple files and
+               the viewer is admin. Lands on /issue/{cv_id}/compare,
+               which is the same per-group view as /admin/duplicates
+               focused on this one issue (ranked keeper + actions:
+               Review / Make supplement / Exclude). Suppressed for
+               single-file issues since there's nothing to compare.
+               Styled to match the per-row Read / Fix match buttons
+               below so it reads as the page-level action it is. #}
+            {% if is_admin and detail.matched_files|length > 1 %}
+              <a href="/issue/{{ detail.issue.cv_id }}/compare"
+                 class="inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                 title="Side-by-side comparison + duplicate-triage actions">
+                Compare {{ detail.matched_files|length }} files
+              </a>
+            {% endif %}
+            {% if reading_progress %}
+              {# Clear this user's saved reading position for the issue. #}
+              <form method="post" action="/read/{{ read_file.file_id }}/reset-progress"
+                    onsubmit="return confirm('Reset reading progress for this issue?')">
+                <button type="submit"
+                        class="text-xs font-medium text-slate-500 hover:text-slate-900 hover:underline">
+                  Reset reading progress
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+        <ul class="space-y-2">
+          {% for f in detail.matched_files %}
+            {# Thumbnail of the file's first page sits flush left so a
+               mis-matched file (e.g. a DC book on an international-
+               publisher issue) reads at a glance — the cover art is the
+               fastest way to spot a wrong match. ``/review/file/{id}/
+               cover`` is the same endpoint the review queue uses; it
+               falls back to a neutral SVG placeholder when extraction
+               failed. The thumbnail links to the reader so clicking it
+               opens the file, matching the convention on other pages. #}
+            <li class="flex items-center gap-3">
+              <a href="/read/{{ f.file_id }}"
+                 class="w-10 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100 hover:border-slate-400 transition"
+                 style="aspect-ratio: 2 / 3;"
+                 title="Open in reader">
+                <img src="/review/file/{{ f.file_id }}/cover" alt=""
+                     loading="lazy"
+                     class="w-full h-full object-cover">
+              </a>
+              <span class="flex-1 min-w-0 text-xs font-mono text-slate-700 break-all">{{ f.path }}</span>
+              <span class="shrink-0 flex items-center gap-2">
+                <a href="/read/{{ f.file_id }}"
+                   class="inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                  Read
+                </a>
+                {% if is_admin %}
+                  <a href="/review/{{ f.file_id }}/volume-search"
+                     class="inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                     title="Search ComicVine for the correct volume and issue, then re-confirm">
+                    Fix match
+                  </a>
+                {% endif %}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block sidebar_nav_links %}
+  {% if detail.description %}{{ sidebar_nav_link("#about", "About") }}{% endif %}
+  {% if detail.persons %}{{ sidebar_nav_link("#credits", "Credits") }}{% endif %}
+  {% if detail.characters %}{{ sidebar_nav_link("#characters", "Characters") }}{% endif %}
+  {% if detail.story_arcs %}{{ sidebar_nav_link("#arcs", "Story arcs") }}{% endif %}
+  {% if detail.teams %}{{ sidebar_nav_link("#teams", "Teams") }}{% endif %}
+  {% if detail.matched_files %}{{ sidebar_nav_link("#files", "Files") }}{% endif %}
+{% endblock %}
+
+{% block sidebar_extras %}
+  {# Publisher block — shared macro, same treatment as the volume sidebar. #}
+  {% if publisher %}
+    {% call sidebar_section("Publisher") %}
+      {{ publisher_chip(publisher) }}
+    {% endcall %}
+  {% endif %}
+
+  {# Volume block — cover thumbnail + name/year tooltip, linking
+     back to the parent volume page. Same chip pattern, different
+     shape (2:3 portrait vs the publisher's square logo). The
+     ``?from=`` anchor lands the volume page centered on this issue. #}
+  {% if detail.volume %}
+    {% call sidebar_section("Volume") %}
+      {{ volume_chip(detail.volume, from_issue_cv_id=detail.issue.cv_id) }}
+    {% endcall %}
+  {% endif %}
+
+  {# Issue navigation rail — prev/next volume neighbors as thumbnails
+     above/below a center "this issue" node, with cross-volume arc
+     branches arrowing off to the left/right and fade extensions on
+     the spine when more issues exist beyond the visible neighbors.
+     Sized to fit the 11rem sidebar (~176px). Falls back to nothing
+     if the issue is a true singleton (no neighbors, no cross-volume
+     arcs). #}
+  {{ issue_rail(detail) }}
+{% endblock %}

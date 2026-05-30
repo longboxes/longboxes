@@ -1,0 +1,92 @@
+{# Credited-volumes list — a paginated, alphabet-filtered grid of
+   volume cards. The creator page's "Credited volumes" tab and the
+   team page's "Volumes" tab both use it; they differ only in the
+   pager / alphabet-bar query params.
+
+   ``volume_credits_list`` args:
+     items       — current page's window of ``VolumeCredit``s
+     total       — full count (before any letter filter)
+     page / page_count — 1-based pager position
+     param       — pager query param ("page" / "vpage")
+     anchor      — id the pager / alphabet links re-anchor to
+     empty_message — shown when ``total`` is 0
+     letter      — active alphabet-bar letter (A-Z / "#"), or None
+     letter_param — query param the alphabet bar sets ("letter" /
+                   "vletter")
+     filtered_count — item count after the letter filter
+     credit_param — when set (e.g. "team:850" / "creator:700"), each
+                   card links to /volume/{id}?credit=<credit_param>,
+                   so the volume page opens filtered to the issues
+                   this team / creator is credited on
+
+   Pagination + filtering are server-side; the route hydrates the
+   displayed volumes, so a card's cover / year / format fill in on a
+   later render. #}
+{% from "_format_macros.html" import format_badge %}
+{% from "_credit_shelves.html" import credit_alphabet %}
+{% from "_volume_credit_card.html" import volume_credit_card %}
+
+{# Windowed numbered pager — page 1 + last pinned, the current page in
+   a ±2 window, gaps collapsed to an ellipsis. Each link carries
+   ``?{param}=`` + ``#{anchor}`` and preserves the active letter. #}
+{% macro _volumes_pager(page, page_count, param, anchor, letter=none, letter_param="letter") %}
+  {% if page_count > 1 %}
+    {% set lq = ('&' ~ letter_param ~ '=' ~ (letter | urlencode)) if letter else '' %}
+    {% set tab_base = "text-center text-xs rounded-t-md border transition-colors select-none px-3" %}
+    {% set tab_active = "bg-white text-slate-900 font-semibold border-slate-300 shadow-sm relative z-10 py-2" %}
+    {% set tab_idle = "bg-slate-100 text-slate-500 font-medium border-slate-200 hover:bg-slate-50 hover:text-slate-700 py-1.5" %}
+    {% set lo = [page - 2, 1] | max %}
+    {% set hi = [page + 2, page_count] | min %}
+    <nav class="mt-5 flex flex-wrap items-end gap-px" aria-label="Pages">
+      {% if lo > 1 %}
+        <a href="?{{ param }}=1{{ lq }}#{{ anchor }}" class="{{ tab_base }} {{ tab_idle }}">1</a>
+        {% if lo > 2 %}<span class="px-2 py-1.5 text-xs text-slate-400 select-none">&hellip;</span>{% endif %}
+      {% endif %}
+      {% for n in range(lo, hi + 1) %}
+        <a href="?{{ param }}={{ n }}{{ lq }}#{{ anchor }}"
+           class="{{ tab_base }} {{ tab_active if n == page else tab_idle }}">{{ n }}</a>
+      {% endfor %}
+      {% if hi < page_count %}
+        {% if hi < page_count - 1 %}<span class="px-2 py-1.5 text-xs text-slate-400 select-none">&hellip;</span>{% endif %}
+        <a href="?{{ param }}={{ page_count }}{{ lq }}#{{ anchor }}" class="{{ tab_base }} {{ tab_idle }}">{{ page_count }}</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endmacro %}
+
+{% macro volume_credits_list(items, total, page, page_count, param, anchor, empty_message, letter=none, letter_param="letter", filtered_count=none, credit_param=none) %}
+  {% if total %}
+    <div class="text-sm text-slate-500 mb-3">
+      {{ total }} volume{{ "s" if total != 1 else "" }}
+      {%- if letter %} &middot; {{ filtered_count }} starting with {{ letter }}{% endif %}
+    </div>
+    {{ credit_alphabet(letter, letter_param, anchor) }}
+    {# ``setupAutoRefresh`` watches every un-hydrated card on this
+       page (the ones the route just enqueued ``revalidate("volume",
+       cv_id)`` for) and polls /volume-credits/hydration to swap
+       them in place once the worker drains. ``credit_param`` is
+       baked into the endpoint URL so the swapped card's link
+       carries the same ``?credit=`` filter the original render
+       used. #}
+    {% if items %}
+      {% set hydration_endpoint = '/volume-credits/hydration' ~ ('?credit=' ~ (credit_param | urlencode) if credit_param else '') %}
+      <div x-data="setupAutoRefresh({ endpoint: '{{ hydration_endpoint }}' })"
+           x-init="scanPending()">
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+          {% for credit in items %}
+            {{ volume_credit_card(credit, credit_param) }}
+          {% endfor %}
+        </ul>
+      </div>
+      {{ _volumes_pager(page, page_count, param, anchor, letter, letter_param) }}
+    {% elif letter %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-500 mt-4">
+        No volumes starting with {{ letter }}.
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-500">
+      {{ empty_message }}
+    </div>
+  {% endif %}
+{% endmacro %}

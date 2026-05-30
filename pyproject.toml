@@ -1,0 +1,79 @@
+[project]
+name = "longboxes"
+version = "0.0.1"
+description = "ComicVine-native, self-hosted comic library manager"
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "psycopg[binary]>=3.2",
+    "redis>=5.2",
+    "rq>=2.0",
+    "pydantic-settings>=2.6",
+    "argon2-cffi>=23.1",
+    "jinja2>=3.1",
+    "rq-scheduler>=0.14",
+    # CBR archive support. Calls out to `unar` (already in the Docker image).
+    # Kept as a direct dep because the "stdlib" archive backend uses it
+    # straight; comicbox also depends on it transitively.
+    "rarfile>=4.2",
+    # Multi-format comic archive reader (CBZ/CBR/CBT/PDF) + metadata
+    # extraction (ComicInfo, MetronInfo, CoMet, ComicBookInfo). Used by
+    # the "comicbox" archive backend (default). The "stdlib" backend
+    # ignores it. PDF support is an extra (``comicbox[pdf]``) that pulls
+    # pymupdf — skipped here because the MVP doesn't ship a PDF reader;
+    # add it later if needed.
+    "comicbox>=1.4.0",
+    # Phase 4 matcher: filename parsing + fuzzy series-name similarity.
+    "comicfn2dict>=0.2",
+    "rapidfuzz>=3.10",
+    # Cover-image geometry + double-wide / wraparound crop
+    # (``app.archives.cover_image``). comicbox depends on Pillow
+    # transitively; we use it directly, so it's declared straight —
+    # same posture as ``rarfile`` above.
+    "pillow>=10.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+    "httpx>=0.27",
+    "fakeredis>=2.26",
+    "respx>=0.21",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.ruff.lint.isort]
+# Be explicit so ruff doesn't get confused between `redis` (third-party) and
+# our internal `app.redis_client` module.
+known-first-party = ["app", "tests"]
+known-third-party = ["redis", "rq", "fakeredis"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# pytest-asyncio 0.23+ defaults to function-scoped event loops, which makes
+# our session-scoped `engine` fixture share a pool across loops that have
+# already been closed. Pin the default loop scope to "session" so all async
+# fixtures and tests share a single event loop.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

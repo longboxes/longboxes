@@ -1,0 +1,21 @@
+{# Card decorations — small visual markers laid over a cover/poster.
+
+   ``corner_flag`` is a filled right-triangle pinned into a card's
+   top-right corner, in the manner of Sonarr's poster status flags.
+   It's built from CSS borders (a zero-size box whose top border is the
+   colour and whose left border is transparent), so it needs no image.
+
+   Drop it inside a ``position: relative`` container — ideally also
+   ``overflow-hidden`` with the same rounding as the card, so the flag's
+   outer corner follows the card's rounded edge.
+
+   ``tone``  — a Tailwind ``border-t-*`` colour token (the triangle's
+               fill), chosen by the caller so each call site owns its
+               own colour convention.
+   ``label`` — surfaced as a hover tooltip describing what the flag
+               denotes. #}
+{% macro corner_flag(tone, label) %}
+  <div class="absolute top-0 right-0 w-0 h-0 border-solid
+              border-t-[22px] border-l-[22px] border-l-transparent {{ tone }}"
+       title="{{ label }}"></div>
+{% endmacro %}

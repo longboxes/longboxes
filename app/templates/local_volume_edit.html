@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Edit volume &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+{# Phase 11E — the edit form for a local volume's hand-entered metadata.
+   ``detail`` is a ``LocalVolumeDetail`` (see app/services/local.py),
+   reused here just to pre-fill the fields. Editing only touches the
+   ``local_volumes`` row — the files matched into it are unaffected. #}
+
+<main class="max-w-2xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/local/volume/{{ detail.id }}" class="hover:underline">&larr; Back to volume</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Edit local volume</h1>
+    <p class="text-sm text-slate-600">
+      Correct the hand-entered metadata for this local volume. Changes
+      apply immediately and don't affect which files belong to it.
+    </p>
+  </div>
+
+  <form method="post" action="/local/volume/{{ detail.id }}/edit"
+        class="bg-white border border-slate-200 rounded-lg p-4 sm:p-5 space-y-5">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <label class="block sm:col-span-2">
+        <span class="text-xs text-slate-500">Volume name</span>
+        <input type="text" name="volume_name" required autocomplete="off"
+               value="{{ detail.name }}"
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+      </label>
+      <label class="block">
+        <span class="text-xs text-slate-500">Volume year
+          <span class="text-slate-300">(optional)</span></span>
+        <input type="number" name="volume_year"
+               value="{{ detail.year or '' }}"
+               placeholder="e.g. 2018"
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+      </label>
+    </div>
+    <label class="block">
+      <span class="text-xs text-slate-500">Publisher
+        <span class="text-slate-300">(optional)</span></span>
+      <input type="text" name="publisher_name"
+             value="{{ detail.publisher_name or '' }}"
+             placeholder="e.g. self-published"
+             class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+    </label>
+
+    {# A short, plain-text volume blurb (Phase 11E). The expression sits
+       flush against the tags — any whitespace inside a <textarea> would
+       become part of the value. #}
+    <label class="block">
+      <span class="text-xs text-slate-500">Description
+        <span class="text-slate-300">(optional)</span></span>
+      <textarea name="description" rows="3"
+                placeholder="A short blurb about this volume."
+                class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">{{ detail.description or '' }}</textarea>
+    </label>
+
+    <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
+      <button type="submit"
+              class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800">
+        Save changes
+      </button>
+      <a href="/local/volume/{{ detail.id }}"
+         class="text-sm text-slate-600 hover:text-slate-900">Cancel</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

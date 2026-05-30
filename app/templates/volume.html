@@ -1,0 +1,734 @@
+{% extends "_entity_page.html" %}
+{% from "_wiki_card.html" import wiki_about_block %}
+{% from "_publisher_chip.html" import publisher_chip %}
+{% from "_cv_badge.html" import cv_badge %}
+{% from "_progress_ring.html" import progress_ring %}
+{% from "_arc_rail.html" import arc_rail %}
+{% from "_entity_hero.html" import entity_hero %}
+{% from "_sidebar.html" import sidebar_section, sidebar_nav_link, mobile_meta_row %}
+{% from "_pagination.html" import view_toggle, pagination_count_label, range_tabs %}
+{% from "_hydration_toast.html" import hydration_toast %}
+{# Shared volume-page macros — arrow_tooltip + arc_tooltip + the
+   per-row volume_issue_row. Lifted into a separate file so the
+   /volume/{cv_id}/issues/hydration endpoint can render the same
+   row markup without re-implementing the macros server-side. #}
+{% from "_volume_macros.html" import arrow_tooltip, arc_tooltip, volume_issue_row %}
+{% from "_issue_card.html" import issue_cover_card %}
+{% from "_format_macros.html" import format_badge, status_badge %}
+{% block title %}{{ detail.volume.name }} &middot; Longboxes{% endblock %}
+
+{# Recursive shelf renderer for the segment-based Gallery view. At each
+   depth ``d``, wraps the inside in this arc's saturated container with
+   optional ← / → arrows on the sides, then either recurses one level
+   deeper or — at the innermost — renders the cover row.
+
+   Containers shrink to fit their content (no ``flex-1``), so for small
+   segments the right arrow sits immediately to the right of the
+   covers rather than across an empty row. Big segments still fill the
+   row because the inner cover flex-wraps once it hits the parent's
+   available width.
+
+   Each cover gets an ``x-show`` against the list pagination window
+   (``start`` / ``count``) using the segment's volume-index offset.
+   That keeps the gallery in lockstep with whatever issues the list
+   view has loaded — switch views, the same set of covers is on screen.
+
+   Color classes come from ``detail.arc_*_color_classes`` (in the
+   enclosing scope). #}
+{% macro segment_shell(segment, d, detail) %}
+  {% if d >= segment.arcs|length %}
+    {# Innermost — covers via flex-wrap with a max-width sized for
+       exactly 8 covers per row (8×80px covers + 7×8px gaps = 696px).
+       Container shrinks to fit actual cover count (≤ 8 covers per
+       shelf), wraps to additional rows for larger shelves. The
+       gallery rail's per-shelf cover-row count matches this same
+       wrap rule. #}
+    <ul class="flex flex-wrap gap-2" style="max-width: 696px;">
+      {% for i in segment.issues %}
+        {% set vol_idx = segment.first_volume_idx + loop.index0 %}
+        <li class="w-20 shrink-0"
+            x-show="{{ vol_idx }} >= start && {{ vol_idx }} < start + count">
+          {{ issue_cover_card(i, dom_id='gallery-issue-' ~ i.cv_id) }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    {% set arc = segment.arcs[d] %}
+    {% set tint = detail.arc_tint_color_classes.get(arc.cv_id) %}
+    {% set text = detail.arc_text_color_classes.get(arc.cv_id) %}
+    {% set prev = segment.prev_links[d] %}
+    {% set next = segment.next_links[d] %}
+    {# Gutter strategy: the OUTERMOST depth (d == 0) always reserves
+       its left/right gutters even when empty, so the first cover of
+       every shelf aligns vertically with the first cover of every other
+       shelf — including bare no-arc rows below. INNER depths (d > 0)
+       only render the gutter when an arrow actually sits there, so
+       nested containers don't pad themselves with dead colored space. #}
+    <div class="flex items-stretch gap-1">
+      {% if d == 0 or prev %}
+        <div class="w-6 flex items-center justify-center shrink-0">
+          {% if prev %}
+            <a href="/issue/{{ prev.issue_cv_id }}"
+               title="{{ arrow_tooltip(prev, '←') }}"
+               class="text-xl font-semibold {{ text }} hover:opacity-70 leading-none">←</a>
+          {% endif %}
+        </div>
+      {% endif %}
+      {# Container shrinks to fit its contents (no flex-1). title on the
+         container itself — hovering any padding (between covers, around
+         the inner container, etc.) surfaces the arc name without needing
+         to bounce up to the legend. ``max-w-full`` + the inner flex-wrap
+         keep big segments from overflowing the row.
+
+         Clicking the container chrome (padding region between/around
+         the covers) navigates to ``/arc/{cv_id}``. The chrome-only
+         guard (``event.target === event.currentTarget``) keeps the
+         cover and arrow links inside from being hijacked — they
+         each have their own ``<a href>`` already and need to win
+         when the user clicks one of them. ``cursor-pointer`` on the
+         div advertises clickability without requiring the user to
+         hover-discover the behaviour. #}
+      <div class="p-2 rounded-lg max-w-full {{ tint }} cursor-pointer hover:brightness-95 transition-[filter]"
+           title="{{ arc_tooltip(arc) }}"
+           onclick="if (event.target === event.currentTarget) window.location='/arc/{{ arc.cv_id }}'">
+        {{ segment_shell(segment, d + 1, detail) }}
+      </div>
+      {% if d == 0 or next %}
+        <div class="w-6 flex items-center justify-center shrink-0">
+          {% if next %}
+            <a href="/issue/{{ next.issue_cv_id }}"
+               title="{{ arrow_tooltip(next, '→') }}"
+               class="text-xl font-semibold {{ text }} hover:opacity-70 leading-none">→</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+  {% call(meta_class, subtle_class, is_banner) entity_hero(
+      title=detail.volume.name,
+      banner_url=detail.banner_url,
+      cover_url=detail.cover_url,
+      cover_alt=detail.volume.name ~ ' cover',
+      cv_site_url=(detail.volume.raw_payload or {}).get('site_detail_url'),
+      breadcrumbs=[{"label": "Library", "href": "/library"}],
+      deck=detail.deck
+  ) %}
+    <div class="text-sm {{ meta_class }} flex items-center gap-2 flex-wrap">
+      {{ format_badge(detail.volume_format) }}
+      {{ status_badge(detail.volume_status) }}
+      <span>
+        {{ detail.volume.year or "Year unknown" }}
+        {% if detail.publisher_name %}<span class="{{ subtle_class }}"> &middot; </span>{{ detail.publisher_name }}{% endif %}
+      </span>
+    </div>
+    <div class="text-sm {{ meta_class }}">
+      <span class="font-medium">{{ detail.owned_count }}</span>
+      {% if detail.volume.count_of_issues %}
+        / <span>{{ detail.volume.count_of_issues }}</span> issues owned
+      {% endif %}
+    </div>
+  {% endcall %}
+
+  {# Mobile completeness + publisher — the sidebar that carries these
+     on lg+ is hidden below lg. #}
+  {{ mobile_meta_row(publisher, detail.owned_count, detail.volume.count_of_issues) }}
+
+  {{ wiki_about_block(
+       detail.description,
+       banner_url=detail.banner_url,
+       breadcrumbs=[{"label": "Library", "href": "/library"}]
+  ) }}
+
+  {# Themes — genre / era / status tags scraped from the volume's CV
+     web page (the JSON API omits them). Plain display pills; status
+     and series type are already surfaced as badges in the hero. #}
+  {% if detail.volume.themes %}
+    <div class="flex flex-wrap items-center gap-1.5 text-xs mt-3">
+      <span class="font-medium text-slate-400">Themes</span>
+      {% for theme in detail.volume.themes %}
+        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{{ theme.name }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# Initial pagination window is computed in get_volume_detail and
+     exposed on ``detail`` so this template, the route's hydration loop,
+     and the arc rail all agree on the same slice. #}
+  {% set initial_start = detail.initial_window_start %}
+  {% set total_issues = detail.issues|length %}
+
+  {# Flat list of issue CV IDs in volume order — Alpine slices this on
+     each pagination expansion to POST newly visible issues to
+     /hydrate-issues. Both List and Gallery now share this single window
+     so there's only one pagination state to maintain. #}
+  {% set ids_csv = detail.issues | map(attribute='cv_id') | join(',') %}
+
+  {# Credit filter banner — shown when the page was opened from a
+     volume card on a team / creator page. The issue list (and every
+     arc / rail computation) is already narrowed server-side; this
+     just explains the narrowing and offers a way back to the full
+     volume. #}
+  {% if detail.credit_filter %}
+    {% set cf = detail.credit_filter %}
+    <div class="flex items-center justify-between gap-3 flex-wrap bg-slate-900 text-white rounded-lg px-4 py-3 mb-4 text-sm">
+      <div>
+        Showing <span class="font-semibold">{{ cf.matched }}</span>
+        of {{ cf.volume_total }}
+        issue{{ "s" if cf.volume_total != 1 else "" }} &mdash;
+        credited to
+        <a href="/{{ cf.kind }}/{{ cf.cv_id }}"
+           class="font-semibold underline hover:no-underline">{{ cf.name }}</a>
+      </div>
+      <a href="/volume/{{ detail.volume.cv_id }}"
+         class="shrink-0 rounded-md bg-white/15 hover:bg-white/25 px-3 py-1 font-medium transition-colors">
+        Show all issues
+      </a>
+    </div>
+  {% endif %}
+
+  <section id="issues"
+           x-on:auto-refresh-complete="refreshViews()"
+           x-data="{
+    ...setupAutoRefresh({ endpoint: '/volume/{{ detail.volume.cv_id }}/issues/hydration' }),
+    ...setupPagination({
+      initialStart: {{ initial_start }},
+      pageSize: {{ page_size }},
+      total: {{ total_issues }},
+      issueIds: [{{ ids_csv }}],
+      hydrateEndpoint: '/volume/{{ detail.volume.cv_id }}/hydrate-issues',
+      {# After every pagination state change, repaint the rail SVG
+         fragments for the new ``(start, count)`` window. The rail
+         lives in its own per-view container and doesn't react to
+         start/count via Alpine; ``fetchRail()`` refetches the
+         server-rendered SVG. #}
+      onPaginate() { this.fetchRail(); }
+    }),
+    view: 'list',
+    init() {
+      {# pendingIds tracks the IDs we've kicked off hydration for —
+         server-scoped to the initial window here; ``hydrateRange``
+         extends the set as the user paginates. NOT a DOM scan: the
+         volume page renders every issue in the DOM under ``x-show``,
+         so a generic scan would mark every stub in a 904-issue
+         volume as pending even though the route only enqueued the
+         visible window. #}
+      this.pendingIds = new Set([{{ pending_issue_ids | join(', ') }}]);
+      this._arSyncPendingCount();
+      if (this.pendingIds.size > 0) {
+        this._arStartPolling();
+      }
+    },
+    {# Fired by ``setupAutoRefresh`` once every pending issue in
+       the visible window has been hydrated and swapped in. The
+       per-element swap path handles the List view's <tr> and the
+       Gallery view's cover <a>, but the Arcs view's per-arc shelves
+       intentionally skip ID emission (an issue can legitimately
+       appear in multiple arc shelves → duplicate-ID risk), so they
+       stay stale.
+
+       This re-fetches the current URL, parses out each of the three
+       view containers by id, and replaces them in place. Alpine's
+       mutation observer reprocesses directives on the swapped
+       elements; the surrounding section's x-data (view, start,
+       count) stays put. #}
+    async refreshViews() {
+      try {
+        const res = await fetch(window.location.href, {
+          headers: {'X-Auto-Refresh': '1'},
+        });
+        if (!res.ok) return;
+        const html = await res.text();
+        const wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        for (const viewId of ['view-list', 'view-gallery', 'view-arcs']) {
+          const oldEl = document.getElementById(viewId);
+          const newEl = wrap.querySelector('#' + viewId);
+          if (oldEl && newEl) oldEl.replaceWith(newEl);
+        }
+        {# Swapped-in views contain rail containers rendered for
+           the SERVER's initial window. Refetch the rail SVG at
+           the user's current ``(start, count)`` so pagination-
+           scoped nodes don't disappear after the swap. #}
+        this.fetchRail();
+      } catch (e) { /* swallow */ }
+    },
+    async fetchRail() {
+      {# Re-fetch the rail SVG fragment for the current window.
+         List + Gallery have separate rail containers (different
+         DOM layouts); refresh whichever is present. Desktop-only —
+         the containers don't render on mobile so the lookup misses. #}
+      const targets = [
+        ['list', document.getElementById('list-rail-container')],
+        ['gallery', document.getElementById('gallery-rail-container')],
+        ['arcs', document.getElementById('arcs-rail-container')],
+      ];
+      for (const [view, target] of targets) {
+        if (!target) continue;
+        try {
+          const url = `/volume/{{ detail.volume.cv_id }}/rail?start=${this.start}&count=${this.count}&view=${view}{% if detail.credit_filter %}&credit={{ detail.credit_filter.kind }}:{{ detail.credit_filter.cv_id }}{% endif %}`;
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          target.innerHTML = await res.text();
+        } catch (e) { /* ignore — leaves the stale rail until next change */ }
+      }
+    }
+  }">
+    <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+      <div class="flex items-baseline gap-3">
+        <h2 class="text-lg font-medium">Issues</h2>
+        {# All three views share the same pagination window, so the
+           "Showing N–M of T" line applies universally. #}
+        {{ pagination_count_label(item_label='issue') }}
+      </div>
+      {# View toggle: List + Gallery share volume-order pagination;
+         Arcs regroups everything by story arc and shows all shelves
+         at once. #}
+      {{ view_toggle([
+        {"key": "list",    "label": "List"},
+        {"key": "gallery", "label": "Gallery"},
+        {"key": "arcs",    "label": "Arcs"},
+      ]) }}
+    </div>
+
+    {# Arc legend — shared across List, Gallery, and Arcs views so the
+       color-to-arc mapping is always visible. Each entry is a colored
+       pill holding the arc name (the pill IS the color swatch now,
+       which doubles its visual job), followed by the CV-parsed
+       parent book as plain muted text when present. Tooltip on the
+       whole pair carries the same "<arc> (<book>)" string the gallery
+       containers and stripe slots use. #}
+    {% if detail.arc_slots %}
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-600 mb-2">
+        <span class="font-medium text-slate-500">Story arcs:</span>
+        {% for arc in detail.arc_slots %}
+          {# Whole legend entry (pill + parent-book label) links to
+             ``/arc/{cv_id}``. ``inline-flex`` keeps the pill and
+             label visually attached; ``hover:opacity-80`` is the
+             same hover treatment the arc pills on the issue page
+             use, so the interaction reads consistently across
+             surfaces. #}
+          <a href="/arc/{{ arc.cv_id }}"
+             title="{{ arc_tooltip(arc) }}"
+             class="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+            {# Pill uses the deeper 500/600-tier palette
+               (``arc_pill_bg_color_classes``) paired with white text
+               so legibility stays consistent across all eight hues —
+               the lighter 400-tier used by stripes/containers can't
+               carry either black or white text reliably on the
+               purple/rose/fuchsia entries. The pill is still
+               recognizably the same hue as the gallery container
+               for the same arc, so the legend → container color
+               mapping reads at a glance. #}
+            <span class="inline-block rounded px-1.5 py-0.5 font-medium text-white {{ detail.arc_pill_bg_color_classes.get(arc.cv_id) }}">{{ arc.name }}</span>
+            {% if arc.primary_book %}
+              <span class="text-slate-500">{{ arc.primary_book }}</span>
+            {% endif %}
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {# Range-tab pagination — longbox divider tabs; each tab jumps
+       straight to a page of issues. Rendered above and below the
+       views so the reader can flip from either end. #}
+    {{ range_tabs() }}
+
+    {# ---- List view (default) ---- #}
+    {# Two-column flex: table on the left, arc-flow rail SVG on the
+       right. Row heights are locked to ``--row-h`` so each tbody row's
+       center aligns with the rail's corresponding node y-coord. The
+       rail container sits with a top margin equal to the thead's
+       rendered height so its first node lines up with the first body
+       row.
+
+       Row height of 72 fits: 60px cover (w-10 + aspect-ratio 2/3) +
+       8px py-1 padding + 1px tr border-t = 69px of required content,
+       plus 3px breathing room. Anything less and the rows expand past
+       --row-h to fit, drifting the rail downward by ~1px per row. #}
+    <div id="view-list" x-show="view === 'list'" class="flex items-start gap-3"
+         style="--row-h: 72px; --thead-h: 33px;">
+      {# Arc-flow rail on the LEFT of the table on desktop. On mobile
+         the rail is hidden entirely and arc identity is carried by
+         the per-row stripe column (see ``md:hidden`` toggling on the
+         stripe column's <th>/<td> below).
+
+         The id is the swap target for Alpine's ``fetchRail`` — on
+         pagination changes the handler GETs the rail fragment for the
+         new (start, count) window and replaces this container's
+         innerHTML. #}
+      {# Always render the rail container if a model exists, even
+         when its branches list is empty. On a brand-new volume the
+         arcs haven't been discovered from issue payloads yet, so
+         ``branches`` is initially empty and the rail SVG is
+         spine-only — but it still needs to be in the DOM so
+         ``fetchRail()`` can find it and re-fetch a populated SVG
+         once issue hydration drains and arcs come online. #}
+      {% if detail.list_rail %}
+        <div id="list-rail-container" class="shrink-0 hidden md:block"
+             style="margin-top: var(--thead-h);">
+          {{ arc_rail(detail.list_rail) }}
+        </div>
+      {% endif %}
+
+      <div class="flex-1 min-w-0">
+
+      <table class="w-full text-sm bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <thead class="text-left text-xs uppercase text-slate-500 bg-slate-50">
+          <tr>
+            {# Arc-navigation arrow column (left side). Renders ← arrows
+               for arcs whose previous member lives in a different volume.
+               Empty cell on rows where no arc has a left-boundary here.
+               Pre-sized to fit the hovered text-2xl glyphs so row hover
+               doesn't trigger horizontal layout shift. #}
+            <th class="py-2 pl-2 pr-0" style="width: 2.25rem;"></th>
+            {% if detail.arc_slots %}
+              {# One header cell wide enough to hold all arc-stripe slots:
+                 each slot is w-1 (4px) with gap-px (1px) between.
+                 Hidden on desktop where the arc rail to the left replaces
+                 the stripe column entirely. #}
+              <th class="py-2 pl-2 md:hidden" style="width: calc({{ detail.arc_slots|length }} * 5px + 0.5rem);"></th>
+            {% endif %}
+            <th class="py-2 px-3 w-14"></th>
+            <th class="py-2 px-3">#</th>
+            <th class="py-2 px-3">Name</th>
+            <th class="py-2 px-3 text-right">Status</th>
+            {# Arc-navigation arrow column (right side). Renders → arrows
+               for arcs whose next member lives in a different volume.
+               Same width as the left arrow column for hover-shift
+               immunity. #}
+            <th class="py-2 pl-0 pr-2" style="width: 2.25rem;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for i in detail.issues %}{{ volume_issue_row(detail, i) }}{% endfor %}
+        </tbody>
+      </table>
+      </div>{# /table column #}
+    </div>
+
+    {# ---- Gallery view (volume-order segments with nested arc containers) ---- #}
+    {# Walks the volume in issue-number order, grouping contiguous runs
+       of issues that share the same arc set into "segments." Each
+       segment renders as one shelf: nested tinted containers for the
+       arcs (outermost = first-seen), ← / → arrows on the sides of each
+       arc's container when the arc continues elsewhere (suppressed when
+       the immediately adjacent segment also has the arc).
+
+       The legend at the top of the page decodes container colors.
+       Gallery shares the List view's pagination window — both views
+       render the same loaded issues, just in different layouts. Each
+       segment is wrapped in ``x-show`` against the segment's volume-
+       index span, and each cover inside is gated on its individual
+       volume index. So when List shows issues 100–129, Gallery shows
+       exactly those issues, regrouped into shelves. #}
+    <div id="view-gallery" x-show="view === 'gallery'" x-cloak class="flex items-start gap-3">
+      {# Gallery rail on the LEFT of the shelves on desktop. One spine
+         node per shelf, one branch node per shelf-containing-arc, all
+         y-centered on the shelf's vertical middle. Shelves with >8
+         issues wrap covers (flex-wrap, max 8 per row); the rail
+         tracks the resulting shelf height so node alignment stays
+         intact regardless of cover count.
+
+         Render whenever the rail exists — even with zero branches the
+         spine is useful (shows shelf positions). The List rail keeps
+         its own ``branches`` guard since List shows every arc
+         unconditionally; Gallery applies the branch-appearance rule
+         (silent on single-shelf in-volume arcs) and may legitimately
+         end up with zero branches even when arcs are present. #}
+      {% if detail.gallery_rail %}
+        <div id="gallery-rail-container" class="shrink-0 hidden md:block">
+          {{ arc_rail(detail.gallery_rail) }}
+        </div>
+      {% endif %}
+
+      <div class="flex-1 min-w-0">
+      {% for segment in detail.gallery_segments %}
+        {# Shelf shows if its issue range overlaps with the loaded
+           pagination window — i.e., at least one issue is in scope.
+           Variable height: each shelf grows with its cover count
+           (8 per row), and the rail's per-shelf cover-row tracking
+           keeps node y-coords aligned. #}
+        <div x-show="{{ segment.first_volume_idx }} < start + count
+                  && {{ segment.last_volume_idx }} >= start">
+          {% if segment.arcs %}
+            {{ segment_shell(segment, 0, detail) }}
+          {% else %}
+            {# "No arc" segment: bare row of covers, no container, no
+               arrows. Empty w-6 gutters on both sides so the first
+               cover lines up with the first cover of arc-shelved rows
+               (which always reserve their outermost gutter for visual
+               alignment). Each cover gets the same ``x-show`` treatment
+               as the arc-shelf branch so the bare row flows naturally
+               with just the visible covers. #}
+            <div class="flex items-stretch gap-1">
+              <div class="w-6 shrink-0"></div>
+              <ul class="flex flex-wrap gap-2 p-2" style="max-width: 712px;">
+                {% for i in segment.issues %}
+                  {% set vol_idx = segment.first_volume_idx + loop.index0 %}
+                  <li class="w-20 shrink-0"
+                      x-show="{{ vol_idx }} >= start && {{ vol_idx }} < start + count">
+                    {{ issue_cover_card(i, dom_id='gallery-issue-' ~ i.cv_id) }}
+                  </li>
+                {% endfor %}
+              </ul>
+              <div class="w-6 shrink-0"></div>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>{# /shelves column #}
+    </div>
+
+    {# ---- Arcs view (per-arc shelves) ---- #}
+    {# Regroups every issue by story arc. Each shelf has a colored
+       header, a tinted container holding that arc's covers (in arc
+       reading order), and ← / → arrows on the sides for arcs that
+       continue in other volumes. Bound to the same pagination as List/
+       Gallery — a shelf shows only if at least one of its issues is in
+       the loaded window, and each cover inside is gated on its
+       individual volume index. So expanding the window discovers new
+       arcs whose first members were previously unloaded.
+
+       Two-column flex matches the List view (rail on the LEFT, shelves
+       on the right) — but the rail here is the spec's "lines only"
+       variant: same per-issue list_rail model, rendered with
+       ``show_nodes=false`` so it reads as pure temporal-overlap
+       visualization rather than per-row alignment. The rail is
+       deliberately NOT vertically aligned to any shelf (the Arcs
+       view's shelves are grouped by arc, not by publication order,
+       so node-level alignment would be misleading anyway). #}
+    <div id="view-arcs" x-show="view === 'arcs'" x-cloak class="flex items-start gap-3">
+      {# Lines-only rail on the LEFT (desktop). Independent of the
+         shelves — its y-axis is publication order, not arc order.
+         Uses the compact ``arcs_rail`` model (smaller row pitch +
+         bend offset) so the rail's vertical extent fits the per-arc
+         shelves; the full ``list_rail`` height would dwarf them.
+
+         ``margin-top: 26px`` clears the first shelf's header row
+         (swatch + arc name + book subtitle + count, ~26px tall).
+         Without it, the rail's diverge bend visually starts above
+         the first arc's label and reads as "floating" over an
+         empty zone. List view does the analogous thing with
+         ``--thead-h`` for the table header. #}
+      {# Same lenient guard as the list rail — spine-only on initial
+         render of a fresh volume, populated by ``fetchRail()`` once
+         arcs come online via background hydration. #}
+      {% if detail.arcs_rail %}
+        <div id="arcs-rail-container" class="shrink-0 hidden md:block"
+             style="margin-top: 26px;">
+          {{ arc_rail(detail.arcs_rail, show_nodes=false) }}
+        </div>
+      {% endif %}
+
+      <div class="flex-1 min-w-0 space-y-4">
+
+      {% for shelf in detail.gallery_shelves %}
+        {% set tint_class = detail.arc_tint_color_classes.get(shelf.arc.cv_id) %}
+        {% set text_class = detail.arc_text_color_classes.get(shelf.arc.cv_id) %}
+        {# Min/max volume_idx across this shelf's issues. Used for the
+           shelf-level x-show so we hide the whole section when none of
+           its issues are in window. #}
+        {% set shelf_min_idx = (shelf.issues | map(attribute='volume_idx') | min) %}
+        {% set shelf_max_idx = (shelf.issues | map(attribute='volume_idx') | max) %}
+        <section x-show="{{ shelf_min_idx }} < start + count && {{ shelf_max_idx }} >= start">
+          {# Header is the arc name + (optional) parent-book subtitle
+             + count. The name + subtitle pair links to the arc page
+             — same target as the legend pill at the top, just a
+             larger click area here since the Arcs view is the place
+             where a reviewer is most likely to want to drill into a
+             specific arc. The count span stays static; it's
+             informational rather than navigational. #}
+          <div class="flex items-center gap-2 mb-1.5">
+            <a href="/arc/{{ shelf.arc.cv_id }}"
+               title="{{ arc_tooltip(shelf.arc) }}"
+               class="inline-flex items-center gap-2 hover:opacity-70 transition-opacity">
+              {# Solid color swatch — carries the arc's identity in the
+                 header itself, so the grouping still reads on mobile
+                 where the colored rail is hidden. #}
+              <span class="w-2.5 h-2.5 rounded-sm shrink-0 {{ detail.arc_pill_bg_color_classes.get(shelf.arc.cv_id) }}"></span>
+              <h3 class="text-sm font-medium text-slate-800">{{ shelf.arc.name }}</h3>
+              {% if shelf.arc.primary_book %}
+                <span class="text-xs text-slate-400">from {{ shelf.arc.primary_book }}</span>
+              {% endif %}
+            </a>
+            <span class="text-xs text-slate-500">
+              {{ shelf.issues|length }} issue{{ "s" if shelf.issues|length != 1 else "" }} in this volume
+            </span>
+          </div>
+          <div class="flex items-stretch gap-2">
+            {# Left arrow column — vertically centered alongside the
+               wrapped cover grid. Empty cell (same width) when no
+               prev sibling exists, so shelf headers still line up. #}
+            <div class="flex items-center justify-center w-7 shrink-0">
+              {% if shelf.prev_link %}
+                <a href="/issue/{{ shelf.prev_link.issue_cv_id }}"
+                   title="{{ arrow_tooltip(shelf.prev_link, '←') }}"
+                   class="text-2xl font-semibold {{ text_class }} hover:opacity-70 leading-none">←</a>
+              {% endif %}
+            </div>
+
+            {# Tinted container with the in-arc covers. flex-wrap so big
+               shelves wrap naturally; gap and padding match the row's
+               breathing room. Each cover x-shown by its volume index.
+
+               Same chrome-only click handler as the Gallery view's
+               nested arc containers: clicking the padding / gap region
+               navigates to /arc/{cv_id}, but clicks on a nested cover
+               <a> propagate to that cover's link instead. ``cursor-
+               pointer`` + ``brightness-95`` advertise the affordance
+               without competing with the cover thumbnails. #}
+            <ul class="flex-1 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 p-2 rounded-lg border border-slate-200 cursor-pointer hover:brightness-95 transition-[filter] {{ tint_class }}"
+                title="{{ arc_tooltip(shelf.arc) }}"
+                onclick="if (event.target === event.currentTarget) window.location='/arc/{{ shelf.arc.cv_id }}'">
+              {% for i in shelf.issues %}
+                <li x-show="{{ i.volume_idx }} >= start && {{ i.volume_idx }} < start + count">
+                  {{ issue_cover_card(i) }}
+                </li>
+              {% endfor %}
+            </ul>
+
+            {# Right arrow column — mirror of the left. #}
+            <div class="flex items-center justify-center w-7 shrink-0">
+              {% if shelf.next_link %}
+                <a href="/issue/{{ shelf.next_link.issue_cv_id }}"
+                   title="{{ arrow_tooltip(shelf.next_link, '→') }}"
+                   class="text-2xl font-semibold {{ text_class }} hover:opacity-70 leading-none">→</a>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+      {% endfor %}
+
+      {# Unaffiliated: issues not in any arc. Same x-show treatment so
+         it disappears when no unaffiliated issue is in the window. #}
+      {% if detail.gallery_unaffiliated %}
+        {% set un_min_idx = (detail.gallery_unaffiliated | map(attribute='volume_idx') | min) %}
+        {% set un_max_idx = (detail.gallery_unaffiliated | map(attribute='volume_idx') | max) %}
+        <section x-show="{{ un_min_idx }} < start + count && {{ un_max_idx }} >= start">
+          {% if detail.gallery_shelves %}
+            <div class="flex items-center gap-2 mb-1.5">
+              <h3 class="text-sm font-medium text-slate-800">Other issues</h3>
+              <span class="text-xs text-slate-500">
+                {{ detail.gallery_unaffiliated|length }} not in any tracked arc
+              </span>
+            </div>
+          {% endif %}
+          <div class="flex items-stretch gap-2">
+            {# Match the shelf gutter widths so the cover grid lines up
+               vertically with the tinted shelves above. #}
+            <div class="w-7 shrink-0"></div>
+            <ul class="flex-1 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 p-2 rounded-lg border border-slate-200 bg-slate-50">
+              {% for i in detail.gallery_unaffiliated %}
+                <li x-show="{{ i.volume_idx }} >= start && {{ i.volume_idx }} < start + count">
+                  {{ issue_cover_card(i) }}
+                </li>
+              {% endfor %}
+            </ul>
+            <div class="w-7 shrink-0"></div>
+          </div>
+        </section>
+      {% endif %}
+      </div>{# /shelves column #}
+    </div>
+
+    {# Range-tab pagination again, below the views — flip pages
+       without scrolling back to the top. #}
+    {{ range_tabs() }}
+
+    {# Live countdown toast — fixed bottom-right, shows while
+       background hydration is draining the visible-window queue.
+       Each pending entry is one per-issue ``/issue/<id>/`` fetch
+       (cover + name + arc credits + cover_date), so "issue" is the
+       accurate noun even though the visible chrome is mostly cover
+       thumbnails. #}
+    {{ hydration_toast(label='issue') }}
+  </section>
+
+  {# Phase 11F — non-issue files attached to this volume (cover
+     galleries, extras). A clearly-separate section below the run. #}
+  {% if detail.supplements %}
+    <section id="supplements" class="mt-8">
+      <h2 class="text-lg font-medium">Supplements</h2>
+      <p class="text-sm text-slate-500 mt-0.5 mb-3">
+        Non-issue extras attached to this volume &mdash; not part of the
+        issue run.
+      </p>
+      <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {% for s in detail.supplements %}
+          <li class="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-3">
+            <div class="w-12 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+              <img src="/review/file/{{ s.file_id }}/cover" alt="" loading="lazy"
+                   class="w-full h-full object-cover">
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-slate-900 break-all">{{ s.filename }}</div>
+              <div class="text-xs text-slate-500 mt-0.5">{{ s.type_label }}</div>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# Fix-match escape hatch. When the matcher confirmed a group of
+     files against the wrong CV volume (same series name, wrong
+     publisher), the reviewer notices it here, on the volume page,
+     rather than in the queue. The button leads to a CV-volume
+     search; picking the correct volume re-maps every file by issue
+     number. Only shown when the volume actually has owned files —
+     nothing to re-match on an empty volume. Admin-only because the
+     action mutates ``file_matches`` rows. #}
+  {% if user is defined and user is not none and user.role == "admin" and detail.owned_count %}
+    <section class="mt-8 bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-sm font-medium text-slate-800">Wrong volume?</div>
+        <div class="text-xs text-slate-500">
+          If the matcher confirmed these files against the wrong CV
+          volume (same series name, wrong publisher, etc.), pick the
+          correct volume and we'll re-map every file by issue number.
+        </div>
+      </div>
+      <a href="/volume/{{ detail.volume.cv_id }}/fix-match"
+         class="shrink-0 rounded-md border border-rose-300 bg-white text-rose-700 text-sm font-medium px-4 py-2 hover:bg-rose-50">
+        Fix match
+      </a>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block sidebar_nav_links %}
+  {% if detail.description %}
+    {{ sidebar_nav_link("#about", "About") }}
+  {% endif %}
+  {{ sidebar_nav_link("#issues", "Issues") }}
+  {% if detail.supplements %}
+    {{ sidebar_nav_link("#supplements", "Supplements") }}
+  {% endif %}
+{% endblock %}
+
+{% block sidebar_extras %}
+  {# Publisher block — driven by the shared _publisher_chip macro.
+     The route passes the publisher row (separate from ``detail``)
+     and the macro renders the icon (or a text fallback for stubs). #}
+  {% if publisher %}
+    {% call sidebar_section("Publisher") %}
+      {{ publisher_chip(publisher) }}
+    {% endcall %}
+  {% endif %}
+
+  {# Completeness ring — owned vs total issues — and, beneath it, the
+     reading-progress ring: issues finished vs total. Both are skipped
+     when CV didn't tell us the total (some volumes have
+     count_of_issues=null, usually stubs or oddly-shaped one-shots). #}
+  {% if detail.volume.count_of_issues %}
+    {% call sidebar_section("Completeness") %}
+      {{ progress_ring(detail.owned_count, detail.volume.count_of_issues) }}
+    {% endcall %}
+    {% call sidebar_section("Reading") %}
+      {{ progress_ring(detail.finished_issue_count, detail.volume.count_of_issues) }}
+    {% endcall %}
+  {% endif %}
+{% endblock %}

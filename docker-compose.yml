@@ -1,0 +1,152 @@
+services:
+  web:
+    build: .
+    image: longboxes:latest
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+    ports:
+      - "${WEB_PORT:-8612}:8080"
+    volumes:
+      - .:/app
+      - ${LIBRARY_PATH:-./.empty-library}:/library:ro
+    environment:
+      DATABASE_URL: postgresql+asyncpg://longboxes:longboxes@db:5432/longboxes
+      DATABASE_URL_SYNC: postgresql+psycopg://longboxes:longboxes@db:5432/longboxes
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: dev
+      LOG_LEVEL: INFO
+      LIBRARY_PATHS: ${LIBRARY_PATHS:-/library}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Match worker — drains the ``default`` queue, where match_file
+  # jobs and the volume_issues bulk hydrations they spawn live. This
+  # is the heavy lane: a fresh import can put 19k+ jobs through it.
+  # Parallelism is set via the ``MATCH_WORKER_REPLICAS`` env var
+  # (default 1; set higher in ``.env`` for faster initial imports).
+  # The shared RedisRatePacer keeps the total CV call rate inside
+  # ComicVine's per-resource budgets regardless of replica count, so
+  # more workers buys lower per-call wait time, not more total CV
+  # throughput.
+  worker:
+    build: .
+    image: longboxes:latest
+    command: python -m app.worker
+    deploy:
+      replicas: ${MATCH_WORKER_REPLICAS:-1}
+    volumes:
+      - .:/app
+      # Library mount — bind in via LIBRARY_PATH on the host. Read-only because
+      # we never write to the library in MVP. Same path used by web for the
+      # future reader endpoint.
+      - ${LIBRARY_PATH:-./.empty-library}:/library:ro
+    environment:
+      DATABASE_URL: postgresql+asyncpg://longboxes:longboxes@db:5432/longboxes
+      DATABASE_URL_SYNC: postgresql+psycopg://longboxes:longboxes@db:5432/longboxes
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: dev
+      LOG_LEVEL: INFO
+      # Match lane only — the non-match worker below picks up
+      # interactive + scan.
+      WORKER_QUEUES: default
+      # Seeds app_settings.library_paths on first boot if that row is unset.
+      # Comma-separated; defaults to the conventional /library mount.
+      LIBRARY_PATHS: ${LIBRARY_PATHS:-/library}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Interactive worker — drains the ``interactive`` queue only
+  # (browse-page hydration: stub volumes, character/creator/team/arc
+  # revalidates, scrapes, manual fix-match flows). Kept on its own
+  # process so a long-running scan can't park hydration jobs behind
+  # it — RQ workers don't preempt, so a 30-minute scan would stall
+  # every browse hydration that long if the two shared a worker.
+  worker-interactive:
+    image: longboxes:latest
+    command: python -m app.worker
+    volumes:
+      - .:/app
+      - ${LIBRARY_PATH:-./.empty-library}:/library:ro
+    environment:
+      DATABASE_URL: postgresql+asyncpg://longboxes:longboxes@db:5432/longboxes
+      DATABASE_URL_SYNC: postgresql+psycopg://longboxes:longboxes@db:5432/longboxes
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: dev
+      LOG_LEVEL: INFO
+      WORKER_QUEUES: interactive
+      LIBRARY_PATHS: ${LIBRARY_PATHS:-/library}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Scan worker — drains the ``scan`` queue (recurring scan and admin
+  # "Rescan"). One job at a time, can take as long as it needs to
+  # walk the library. Owns the rq-scheduler recurring-job
+  # registration (the worker entrypoint gates that on
+  # ``scan`` being in WORKER_QUEUES).
+  worker-scan:
+    image: longboxes:latest
+    command: python -m app.worker
+    volumes:
+      - .:/app
+      - ${LIBRARY_PATH:-./.empty-library}:/library:ro
+    environment:
+      DATABASE_URL: postgresql+asyncpg://longboxes:longboxes@db:5432/longboxes
+      DATABASE_URL_SYNC: postgresql+psycopg://longboxes:longboxes@db:5432/longboxes
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: dev
+      LOG_LEVEL: INFO
+      WORKER_QUEUES: scan
+      LIBRARY_PATHS: ${LIBRARY_PATHS:-/library}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # rq-scheduler daemon — polls Redis for due recurring jobs and enqueues
+  # them. The worker registers the recurring scan job on startup; this
+  # process is what actually fires it on schedule.
+  scheduler:
+    build: .
+    image: longboxes:latest
+    command: rqscheduler --url redis://redis:6379/0 -i 30
+    environment:
+      LOG_LEVEL: INFO
+    depends_on:
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: longboxes
+      POSTGRES_PASSWORD: longboxes
+      POSTGRES_DB: longboxes
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U longboxes -d longboxes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
+  redisdata:

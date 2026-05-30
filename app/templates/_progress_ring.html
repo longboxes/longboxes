@@ -1,0 +1,44 @@
+{# Circular progress ring for "X of Y" completion stats.
+
+   Takes:
+     owned (int)        — numerator (e.g., issues you have).
+     total (int | None) — denominator (e.g., total issues in volume).
+                          When falsy, renders only the owned number with
+                          an empty background ring.
+
+   Slate-200 background ring + emerald-500 progress arc, matching the
+   "owned" badge color elsewhere on the site. Visually capped at 100%
+   so over-count situations (variants, CV miscounts) don't render a
+   wrap-around arc. #}
+{% macro progress_ring(owned, total) %}
+  {% set radius = 42 %}
+  {% set circumference = (radius * 2 * 3.14159265) | round(3) %}
+  {% set raw_fraction = (owned / total) if total else 0 %}
+  {% set fraction = [raw_fraction, 1.0] | min %}
+  {% set dash_offset = (circumference * (1 - fraction)) | round(3) %}
+  <div class="relative inline-block" style="width: 96px; height: 96px;">
+    {# Rotated -90deg so 0% sits at 12 o'clock instead of 3 o'clock. #}
+    <svg width="96" height="96" viewBox="0 0 100 100" class="-rotate-90">
+      <circle cx="50" cy="50" r="{{ radius }}"
+              fill="none" stroke="#e2e8f0" stroke-width="8"/>
+      {% if total and owned %}
+        <circle cx="50" cy="50" r="{{ radius }}"
+                fill="none" stroke="#10b981" stroke-width="8"
+                stroke-dasharray="{{ circumference }}"
+                stroke-dashoffset="{{ dash_offset }}"
+                stroke-linecap="round"/>
+      {% endif %}
+    </svg>
+    <div class="absolute inset-0 flex items-center justify-center">
+      <div class="text-center leading-tight">
+        {% if total %}
+          <div class="text-sm font-semibold text-slate-900">
+            {{ owned }}<span class="text-slate-400">/{{ total }}</span>
+          </div>
+        {% else %}
+          <div class="text-sm font-semibold text-slate-900">{{ owned }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endmacro %}

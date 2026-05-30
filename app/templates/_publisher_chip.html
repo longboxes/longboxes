@@ -1,0 +1,30 @@
+{# Renders a publisher as a clickable icon (with alt + hover name).
+
+   Takes a ``CvPublisher`` ORM object (or None — renders nothing). The
+   icon URL is pulled from ``raw_payload.image.icon_url`` via the
+   ``cv_image_url`` global (registered in ``app/templates_env.py``).
+
+   Three cases handled:
+     1. Hydrated publisher with icon → 64×64 logo, link, hover tooltip.
+     2. Hydrated publisher without an icon → text-only name link.
+     3. Stub publisher (raw_payload._stub=True, no image data yet) →
+        text-only name link. The caller is expected to have enqueued a
+        revalidate so a future page load shows the icon.
+     4. None → renders nothing at all (zero-output macro). #}
+{% macro publisher_chip(publisher) %}
+  {% if publisher %}
+    {% set icon_url = cv_image_url(publisher.raw_payload, "icon") %}
+    {% if icon_url %}
+      <a href="/publisher/{{ publisher.cv_id }}"
+         title="{{ publisher.name }}"
+         class="inline-block hover:opacity-70 transition-opacity">
+        <img src="{{ icon_url }}"
+             alt="{{ publisher.name }}"
+             class="w-24 h-24 object-contain rounded">
+      </a>
+    {% else %}
+      <a href="/publisher/{{ publisher.cv_id }}"
+         class="text-sm text-slate-600 hover:text-slate-900">{{ publisher.name }}</a>
+    {% endif %}
+  {% endif %}
+{% endmacro %}

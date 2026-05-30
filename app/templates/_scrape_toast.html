@@ -1,0 +1,51 @@
+{# Background-scrape toast for the character / creator pages.
+
+   On load, those pages kick off best-effort ComicVine site scrapes for
+   the volume-less "Also appears in" appearances (see
+   ``_enqueue_credit_scrapes`` in the library routes). The scrapes run
+   in the background; their payoff — an appearance gaining a volume and
+   moving from the flat list into a proper volume card — only shows on
+   a fresh render. This toast tells the user that work is in flight and
+   gives them a one-click refresh.
+
+   ``count`` is how many scrapes were enqueued on this render; the toast
+   is skipped entirely when it's zero, so it shows on the first visit
+   and quietly stops once every appearance has been scraped. ``noun`` is
+   the singular item noun ("appearance" / "credit").
+
+   Self-contained Alpine — needs no ``setupAutoRefresh`` scope (unlike
+   ``_hydration_toast.html``); it's a static, render-time count. #}
+{% macro scrape_toast(count, noun='appearance') %}
+  {% if count %}
+    <div x-data="{ open: true }"
+         x-show="open"
+         x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-2"
+         role="status"
+         aria-live="polite"
+         class="fixed bottom-4 right-4 z-50 flex items-start gap-3 max-w-xs rounded-lg bg-slate-900 text-white shadow-lg pl-3 pr-2 py-2.5">
+      {# Spinner ring — same pure-CSS treatment as the hydration toast. #}
+      <span class="mt-0.5 block w-4 h-4 shrink-0 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+      <div class="min-w-0 text-sm">
+        <p class="font-medium">
+          Fetching {{ count }} more {{ noun }}{{ "s" if count != 1 else "" }} from ComicVine
+        </p>
+        <p class="text-slate-300 text-xs mt-0.5">
+          Once fetched they're sorted into volumes —
+          <a href="#" @click.prevent="window.location.reload()"
+             class="underline hover:text-white">refresh</a>
+          in a moment to see them.
+        </p>
+      </div>
+      <button type="button" @click="open = false" aria-label="Dismiss"
+              class="shrink-0 -mt-0.5 text-xl leading-none text-slate-400 hover:text-white">
+        &times;
+      </button>
+    </div>
+  {% endif %}
+{% endmacro %}

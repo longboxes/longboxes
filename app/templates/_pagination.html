@@ -1,0 +1,122 @@
+{# Paginated-view chrome shared by volume, arc, and publisher pages.
+
+   These macros assume Alpine state from ``setupPagination`` (in
+   ``pagination.js``) is in scope:
+
+     start, count, total, pageSize, visibleEnd(), loadEarlier(),
+     loadMore(), showAll()
+
+   plus a ``view`` reactive string for the view toggle. Pages that
+   want pagination chrome without view switching can use the
+   pagination macros alone — ``view_toggle`` is independent. #}
+
+{# ---- View toggle ----------------------------------------------- #}
+{# ``views`` is a list of ``{"key": <alpine value>, "label": <display>}``
+   dicts. The macro emits one ``<button>`` per view; the active
+   styling is driven reactively off Alpine's ``view`` variable.
+
+   Usage:
+     {{ view_toggle([
+       {"key": "list",    "label": "List"},
+       {"key": "gallery", "label": "Gallery"},
+     ]) }}
+#}
+{% macro view_toggle(views) %}
+  <div class="inline-flex items-center gap-0.5 text-xs border border-slate-200 rounded-md p-0.5 bg-white">
+    {% for v in views %}
+      <button type="button" @click="view = '{{ v.key }}'"
+              :class="view === '{{ v.key }}' ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:text-slate-900'"
+              class="px-2 py-1 rounded font-medium">{{ v.label }}</button>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{# ---- Pagination count label ------------------------------------ #}
+{# "Showing N–M of T" when the window is offset or partial, falling
+   back to "T items" when everything is on screen. Pages pass an
+   ``item_label`` (singular noun — pluralized inline) and an
+   optional ``suffix`` ("in arc reading order", "in the publisher's
+   library", etc.) that's appended in both branches.
+
+   Hidden by ``x-show`` rather than skipped when ``total == 0`` —
+   keeps the layout stable as the user filters / paginates. #}
+{% macro pagination_count_label(item_label='item', suffix='') %}
+  {% set tail = (' ' ~ suffix) if suffix else '' %}
+  <span class="text-xs text-slate-500"
+        x-text="!(total <= count && start === 0)
+          ? `Showing ${start + 1}–${visibleEnd()} of ${total}{{ tail }}`
+          : `${total} {{ item_label }}${total === 1 ? '' : 's'}{{ tail }}`"></span>
+{% endmacro %}
+
+{# ---- Load-earlier button --------------------------------------- #}
+{# Only renders when ``start > 0`` — i.e., the user has paginated
+   forward and there's stuff before the current window. Width of
+   the next slice is ``min(pageSize, start)`` because we don't want
+   the button to claim "load 15 earlier" when only 3 rows exist
+   before the window. #}
+{% macro load_earlier_button() %}
+  <div x-show="start > 0" x-cloak class="text-center mb-3">
+    <button type="button" @click="loadEarlier()"
+            class="text-xs text-slate-600 hover:text-slate-900 border border-slate-200 rounded-md px-3 py-1.5 bg-white hover:bg-slate-50">
+      ↑ Load <span x-text="Math.min(pageSize, start)"></span> earlier
+    </button>
+  </div>
+{% endmacro %}
+
+{# ---- Load-more / Show-all buttons ------------------------------ #}
+{# Only renders when the visible window doesn't already reach the
+   end. "Load more" advances the window by ``pageSize``; "Show all"
+   jumps straight to ``total`` (useful for ~50-200 item lists where
+   the user wants Cmd-F scope, not endless paging). #}
+{% macro load_more_buttons() %}
+  <div x-show="visibleEnd() < total" x-cloak class="text-center mt-3 flex justify-center items-center gap-3">
+    <button type="button" @click="loadMore()"
+            class="text-xs text-slate-600 hover:text-slate-900 border border-slate-200 rounded-md px-3 py-1.5 bg-white hover:bg-slate-50">
+      ↓ Load <span x-text="Math.min(pageSize, total - visibleEnd())"></span> more
+    </button>
+    <button type="button" @click="showAll()"
+            class="text-xs text-slate-500 hover:text-slate-900">
+      Show all <span x-text="total"></span>
+    </button>
+  </div>
+{% endmacro %}
+
+
+{# ---- Range-tab pagination strip -------------------------------- #}
+{# Longbox divider tabs — the volume page's replacement for the
+   load-earlier / load-more buttons. Each tab jumps straight to a
+   ``pageSize``-issue page; the strip is windowed so it stays compact
+   on long volumes: page 1 is pinned, ~4 tabs track the current page,
+   '‹ More' / 'More ›' tabs flip the window a chunk, and a 'Show all'
+   tab opens the whole volume.
+
+   Reads ``pageCount() currentPage() showingAll() pageTabs()
+   pageLabel() jumpToPage() flipPages() showAll()`` off a
+   ``setupPagination`` scope (see ``pagination.js``). The active tab
+   is raised (taller + white + shadow); the rest sit back, muted —
+   same treatment as the library's alphabet bar. Hidden entirely
+   when the list fits in a single page. #}
+{% macro range_tabs() %}
+  {% set _tab = "text-center text-xs rounded-t-md border transition-colors select-none" %}
+  {% set _active = "bg-white text-slate-900 font-semibold border-slate-300 shadow-sm relative z-10 px-3 py-2" %}
+  {% set _idle = "bg-slate-100 text-slate-500 font-medium border-slate-200 hover:bg-slate-50 hover:text-slate-700 px-3 py-1" %}
+  <nav x-show="pageCount() > 1" x-cloak
+       class="flex flex-wrap items-end gap-px"
+       aria-label="Jump to an issue range">
+    <template x-for="tab in pageTabs()"
+              :key="tab.kind === 'page' ? 'p' + tab.page : 'm' + tab.dir">
+      <button type="button"
+              @click="tab.kind === 'page' ? jumpToPage(tab.page) : flipPages(tab.dir)"
+              class="{{ _tab }}"
+              :class="(tab.kind === 'page' && currentPage() === tab.page && !showingAll())
+                ? '{{ _active }}' : '{{ _idle }}'"
+              x-text="tab.kind === 'page'
+                ? pageLabel(tab.page)
+                : (tab.dir === 'left' ? '‹ More' : 'More ›')"></button>
+    </template>
+    {# 'Show all' escape hatch — render the whole volume in one view. #}
+    <button type="button" @click="showAll()"
+            class="{{ _tab }} ml-1"
+            :class="showingAll() ? '{{ _active }}' : '{{ _idle }}'">All</button>
+  </nav>
+{% endmacro %}

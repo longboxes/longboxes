@@ -1,0 +1,73 @@
+{# A single row in the /search results list.
+
+   Standalone partial so the ``/search/hydration`` polling endpoint
+   can render one updated row server-side and swap it in via
+   ``setupAutoRefresh`` when the underlying stub finishes hydrating.
+
+   ``id="search-hit-<kind>-<cv_id>"`` is the DOM target the swap
+   logic looks for. Stubs (``hit.is_stub``) additionally carry the
+   ``data-pending-id="kind:cv_id"`` + ``data-hydrated="false"`` tuple
+   that ``setupAutoRefresh.scanPending()`` picks up. Hydrated rows
+   omit both — they're already "done" from the auto-refresh's
+   perspective and need no further polling.
+
+   Branches on ``hit.kind``:
+   * ``volume`` — delegates to ``_volume_search_card`` for the
+     rich review-style card (cover + name+year+description popover
+     + format badge + publisher · issue count + CV id). Same markup
+     the matcher's volume picker uses, kept in lock-step via the
+     shared partial.
+   * Everything else — generic 48px-square cover + name + subtitle
+     row. Suits characters / creators / teams / arcs / issues that
+     don't carry the volume's structured side-data.
+   #}
+{% from "_volume_search_card.html" import volume_card_inner %}
+
+{% macro search_hit_row(hit) %}
+  <li id="search-hit-{{ hit.kind }}-{{ hit.key }}"
+      {% if hit.is_stub %}
+        data-pending-id="{{ hit.kind }}:{{ hit.key }}"
+        data-hydrated="false"
+      {% endif %}
+      {# Volume hits carry the publisher + format facets the
+         ``kind=volumes`` filter UI reads. ``x-show`` evaluates inside
+         the search.html Alpine wrapper, which always seeds pubFilter
+         and fmtFilter to ''; on non-volume-kind-filter views the
+         expression is true for every row (no-op). The
+         ``.search-volume-hit`` class is what the filter's
+         ``volumesVisibleCount`` getter queries — keeping it as a
+         class avoids quote-escaping in the Alpine querySelectorAll. #}
+      {% if hit.kind == "volume" %}
+        class="search-volume-hit"
+        data-publisher="{{ (hit.publisher or '') | lower }}"
+        data-format="{{ hit.format or '' }}"
+        x-show="(!pubFilter.trim() || $el.dataset.publisher.includes(pubFilter.trim().toLowerCase())) && (!fmtFilter || $el.dataset.format === fmtFilter)"
+      {% endif %}>
+    {% if hit.kind == "volume" %}
+      {# Rich card. Matches review_volume_search.html. #}
+      <a href="{{ hit.detail_url }}"
+         class="flex items-start gap-3 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-400 hover:shadow-sm transition">
+        {{ volume_card_inner(hit) }}
+      </a>
+    {% else %}
+      {# Generic row — characters, creators, teams, arcs, issues. #}
+      <a href="{{ hit.detail_url }}"
+         class="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
+        <span class="w-12 h-12 shrink-0 rounded-md overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] text-slate-400">
+          {% if hit.cover_url %}
+            <img src="{{ hit.cover_url }}" alt="" loading="lazy"
+                 class="w-full h-full object-cover">
+          {% else %}
+            {{ (hit.name.split() | map('first') | join)[:2] | upper or "?" }}
+          {% endif %}
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block font-medium text-slate-900 truncate">{{ hit.name }}</span>
+          {% if hit.subtitle %}
+            <span class="block text-xs text-slate-500 truncate">{{ hit.subtitle }}</span>
+          {% endif %}
+        </span>
+      </a>
+    {% endif %}
+  </li>
+{% endmacro %}

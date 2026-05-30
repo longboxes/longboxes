@@ -1,0 +1,70 @@
+{# Sidebar building blocks.
+
+   Used by entity pages via ``_entity_page.html`` (which renders the
+   sticky right-sidebar shell). Each labeled block in the sidebar —
+   Publisher, Completeness, Volume, etc. — has the same wrapper:
+   a small uppercase label above the actual widget. ``sidebar_section``
+   provides that wrapper so pages don't repeat the chrome. #}
+
+{# Labeled sidebar block. Caller renders the widget inside (chip,
+   progress ring, rail SVG, etc.). #}
+{% macro sidebar_section(label) %}
+  <div>
+    <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">{{ label }}</div>
+    {{ caller() }}
+  </div>
+{% endmacro %}
+
+{# Single nav link in the "On this page" anchor list. The whole
+   list is short enough that pages emit the links inline rather than
+   passing data through this macro, but keeping the styling
+   centralized here makes future tweaks (active-state highlighting,
+   different prefix icons, etc.) a one-place change. #}
+{% macro sidebar_nav_link(href, label) %}
+  <a href="{{ href }}" class="block text-slate-600 hover:text-slate-900">{{ label }}</a>
+{% endmacro %}
+
+
+{# Mobile-only "completeness + publisher" row. The entity sidebar
+   (completeness ring + publisher chip) is ``hidden lg:block``, so
+   entity pages call this just under their hero to surface the same
+   facts below ``lg`` — phones AND tablets.
+
+   ``total`` falsy → the completeness bar is omitted (the issue page
+   has no completeness concept); ``publisher`` falsy → the chip is
+   omitted; renders nothing at all when both are absent.
+
+   The bar mirrors ``progress_ring``'s palette (slate-200 track,
+   emerald-500 fill) and is capped at 100% so an over-count can't
+   overflow the track. The publisher chip is a compact pill — the
+   ``publisher_chip`` macro renders a 96px logo, sidebar-sized and
+   far too large for this row. #}
+{% macro mobile_meta_row(publisher, owned=none, total=none) %}
+  {% if total or publisher %}
+    <div class="lg:hidden flex items-center gap-3">
+      {% if total %}
+        {% set pct = [(owned / total * 100) | round | int, 100] | min %}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="uppercase tracking-wide text-slate-400">Completeness</span>
+            <span class="font-medium text-slate-600">{{ owned }}<span class="text-slate-400">/{{ total }}</span></span>
+          </div>
+          <div class="h-2 rounded-full bg-slate-200 overflow-hidden">
+            <div class="h-full rounded-full bg-emerald-500" style="width: {{ pct }}%"></div>
+          </div>
+        </div>
+      {% endif %}
+      {% if publisher %}
+        {% set pub_icon = cv_image_url(publisher.raw_payload, "icon") %}
+        <a href="/publisher/{{ publisher.cv_id }}"
+           title="{{ publisher.name }}"
+           class="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 px-2.5 py-1 transition-colors">
+          {% if pub_icon %}
+            <img src="{{ pub_icon }}" alt="" class="w-5 h-5 rounded-sm object-contain bg-white">
+          {% endif %}
+          <span class="text-xs font-medium text-slate-700">{{ publisher.name }}</span>
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endmacro %}

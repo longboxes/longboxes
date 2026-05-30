@@ -1,0 +1,40 @@
+{# Matched-issue cover thumbnail for the Confirm Volume page, with
+   auto-refresh markers so `setupAutoRefresh` can swap a stub-state
+   placeholder for the real cover once the volume's bulk hydration
+   job populates `cv_issues.raw_payload.image`.
+
+   Rendered in two places:
+
+     1. ``review_volume_confirm.html`` (initial page render) — passes
+        whatever cover URL the service resolved at request time.
+     2. ``/review/volume-confirm/{cv_id}/covers`` (poll endpoint) —
+        renders the same macro to produce the swap-in HTML when an
+        issue is newly hydrated.
+
+   Both call sites pass the same arguments; the macro decides which
+   data-* attributes to emit based on whether `cover_url` is set.
+
+   Sizing classes match the inline div this replaced — the file-list
+   row uses ``w-16`` on mobile and ``w-10`` on md+. Don't change one
+   without the other, or the swap-in will resize mid-render.
+#}
+{% macro matched_cover(issue_cv_id, cover_url) %}
+<div id="matched-cover-{{ issue_cv_id }}"
+     data-pending-id="{{ issue_cv_id }}"
+     data-hydrated="{{ 'true' if cover_url else 'false' }}"
+     class="relative self-start w-16 md:w-10 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100"
+     style="aspect-ratio: 2 / 3;">
+  {% if cover_url %}
+    <img src="{{ cover_url }}" alt="" loading="lazy"
+         class="absolute inset-0 w-full h-full object-cover">
+  {% else %}
+    {# Loading placeholder while the bulk-hydration job catches up.
+       Same spinner pattern as ``_hydration_toast.html`` — pure CSS
+       ring rotation, no external sprite. ``aria-busy`` lets screen
+       readers announce the loading state. #}
+    <div class="absolute inset-0 flex items-center justify-center" aria-busy="true">
+      <span class="block w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin"></span>
+    </div>
+  {% endif %}
+</div>
+{% endmacro %}

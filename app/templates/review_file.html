@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Review file &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+{% from "_format_macros.html" import format_badge, volume_info_popover %}
+{% from "_reader_link.html" import reader_link %}
+
+{# One matcher candidate as a confirmable card: cover, volume/issue
+   identity, format badge, match score, and a Confirm form posting to
+   the per-file confirm route. ``is_current`` rings the card and flips
+   the button to "Re-confirm" when this candidate is what the file is
+   already matched to. #}
+{% macro candidate_card(c, is_current, file_id) %}
+  <div class="flex items-center gap-4 bg-white border rounded-lg p-3
+              {% if is_current %}border-emerald-300 ring-1 ring-emerald-200{% else %}border-slate-200{% endif %}">
+    <div class="w-12 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+      {% if c.cover_url %}
+        <img src="{{ c.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+      {% endif %}
+    </div>
+    <div class="flex-1 min-w-0">
+      {% if is_current %}
+        <div class="text-xs uppercase tracking-wide text-emerald-700 font-semibold">Current match</div>
+      {% endif %}
+      {# Name + description popover. The popover icon sits OUTSIDE the
+         ``truncate`` span — ``truncate`` is ``overflow:hidden`` and
+         would clip the absolutely-positioned popover. #}
+      <div class="text-sm font-medium text-slate-900 flex items-center gap-1">
+        <span class="truncate">
+          {% if c.volume_name %}
+            {{ c.volume_name }}{% if c.volume_year %} <span class="text-slate-400 font-normal">({{ c.volume_year }})</span>{% endif %}
+          {% else %}
+            <span class="text-slate-400">(volume unknown)</span>
+          {% endif %}
+        </span>
+        {{ volume_info_popover(c.volume_description) }}
+      </div>
+      <div class="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+        {{ format_badge(c.format) }}
+        <span class="font-mono">#{{ c.issue_number or "?" }}</span>
+        {% if c.issue_name %}<span>&middot; {{ c.issue_name }}</span>{% endif %}
+      </div>
+      <div class="text-xs text-slate-400 mt-0.5 flex flex-wrap gap-x-3">
+        {% if c.volume_publisher %}
+          <span>{{ c.volume_publisher }}</span>
+        {% endif %}
+        {% if c.confidence %}
+          <span>match score <span class="font-mono text-slate-600">{{ "%.2f"|format(c.confidence) }}</span></span>
+        {% endif %}
+        <a href="{{ cv_issue_url(c.issue_cv_id) }}" target="_blank" rel="noopener noreferrer"
+           class="hover:underline" title="Open on ComicVine">CV issue <span class="font-mono">{{ c.issue_cv_id }}</span></a>
+      </div>
+    </div>
+    <form method="post" action="/review/{{ file_id }}/confirm" class="shrink-0">
+      <input type="hidden" name="issue_cv_id" value="{{ c.issue_cv_id }}">
+      <button type="submit"
+              class="rounded-md text-sm font-medium px-4 py-2
+                     {% if is_current %}border border-slate-300 bg-white text-slate-700 hover:bg-slate-100
+                     {% else %}bg-slate-900 text-white hover:bg-slate-800{% endif %}">
+        {% if is_current %}Re-confirm{% else %}Confirm this match{% endif %}
+      </button>
+    </form>
+  </div>
+{% endmacro %}
+
+<main class="max-w-5xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/review" class="hover:underline">← Review queue</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Review file</h1>
+  </div>
+
+  {# File card — cover, identity, the facts the matcher worked from
+     (parsed signals), and the current match status. #}
+  {% set badge = {
+       'pending':   'bg-amber-100 text-amber-800',
+       'confirmed': 'bg-emerald-100 text-emerald-800',
+       'auto':      'bg-sky-100 text-sky-800',
+       'rejected':  'bg-slate-200 text-slate-600',
+       'unmatched': 'bg-rose-100 text-rose-800',
+     }.get(review.status, 'bg-slate-200 text-slate-600') %}
+  <section class="bg-white border border-slate-200 rounded-lg p-4 flex items-start gap-5">
+    <div class="relative w-32 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+      <img src="/review/file/{{ review.file_id }}/cover" alt="" class="w-full h-full object-cover">
+      {{ reader_link(review.file_id) }}
+    </div>
+    <div class="flex-1 min-w-0 space-y-3">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold uppercase tracking-wide rounded px-2 py-0.5 {{ badge }}">
+            {{ review.status }}
+          </span>
+          {% if review.confidence is not none %}
+            <span class="text-xs text-slate-500">
+              confidence <span class="font-mono text-slate-700">{{ "%.2f"|format(review.confidence) }}</span>
+            </span>
+          {% endif %}
+          <span class="text-xs text-slate-400">match source: {{ review.source }}</span>
+        </div>
+        <div class="text-lg font-semibold text-slate-900 break-all">{{ review.filename }}</div>
+        <div class="text-xs text-slate-500 break-all">{{ review.path }}</div>
+      </div>
+
+      {# Intrinsic file facts. #}
+      <div class="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+        <span>sha <span class="font-mono text-slate-700">{{ review.sha256_short }}</span></span>
+        {% if review.archive_format %}
+          <span>format <span class="font-mono text-slate-700">{{ review.archive_format }}</span></span>
+        {% endif %}
+        {% if review.page_count %}
+          <span><span class="font-mono text-slate-700">{{ review.page_count }}</span> pages</span>
+        {% endif %}
+        {% if review.format_guess != "unknown" %}
+          <span class="text-slate-600">likely a
+            {{ "collected edition" if review.format_guess == "collection" else "single issue" }}</span>
+        {% endif %}
+        <span>ComicInfo: {{ review.comicinfo_status }}</span>
+      </div>
+
+      {# Parsed-filename signals — what the matcher searched on. #}
+      <div class="text-xs flex flex-wrap gap-x-3 gap-y-1 text-slate-500 border-t border-slate-100 pt-2">
+        <span class="text-slate-400">parsed:</span>
+        {% set display_series = review.parsed_long_series if (review.parsed_long_series and review.parsed_long_series != review.parsed_series) else review.parsed_series %}
+        <span>series
+          {% if display_series %}<span class="font-mono text-slate-700">{{ display_series }}</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </span>
+        <span>#
+          {% if review.parsed_issue_number %}<span class="font-mono text-slate-700">{{ review.parsed_issue_number }}</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </span>
+        <span>year
+          {% if review.parsed_year %}<span class="font-mono text-slate-700">{{ review.parsed_year }}</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </span>
+        {% if review.parsed_volume_year %}
+          <span>vol-year <span class="font-mono text-slate-700">{{ review.parsed_volume_year }}</span></span>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {# Candidates — the matcher's ranked shortlist, each confirmable.
+     A current match that sits outside the shortlist (e.g. a manual
+     pick) is rendered as one extra card up top so the page always
+     shows what the file points at. #}
+  <section class="space-y-3">
+    <h2 class="text-sm font-medium text-slate-700">Matcher candidates</h2>
+    {% set candidate_ids = review.candidates | map(attribute='issue_cv_id') | list %}
+    {% if review.candidates or review.current_match %}
+      <div class="space-y-2">
+        {% if review.current_match and review.current_match.issue_cv_id not in candidate_ids %}
+          {{ candidate_card(review.current_match, true, review.file_id) }}
+        {% endif %}
+        {% for c in review.candidates %}
+          {{ candidate_card(c, review.issue_cv_id is not none and c.issue_cv_id == review.issue_cv_id, review.file_id) }}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-center text-sm text-slate-500">
+        The matcher kept no candidates for this file — its filename probably
+        didn't parse into anything searchable. Use ComicVine search below to
+        find the right issue.
+      </div>
+    {% endif %}
+  </section>
+
+  {# Actions footer — the escape hatches when no candidate is right:
+     search CV by hand, catalogue the file as a local entry (its comic
+     isn't in ComicVine at all), or reject the lot so the file drops
+     out of the queue. #}
+  <section class="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="min-w-0">
+      <div class="text-sm font-medium text-slate-800">None of these right?</div>
+      <div class="text-xs text-slate-500">
+        Search ComicVine for the correct issue, add the file as a local
+        entry if its comic isn't in ComicVine at all, attach it to a
+        volume as supplemental content if it isn't an issue, or reject
+        every candidate to drop it from the review queue unconfirmed.
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="/review/{{ review.file_id }}/volume-search"
+         class="rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-100">
+        Search ComicVine
+      </a>
+      <a href="/review/{{ review.file_id }}/local"
+         class="rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-100">
+        Add as a local entry
+      </a>
+      <a href="/review/{{ review.file_id }}/supplement"
+         class="rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-100">
+        Attach as supplement
+      </a>
+      <form method="post" action="/review/{{ review.file_id }}/reject">
+        <button type="submit"
+                class="rounded-md border border-rose-300 bg-white text-rose-700 text-sm font-medium px-4 py-2 hover:bg-rose-50">
+          Reject all candidates
+        </button>
+      </form>
+    </div>
+  </section>
+</main>
+{% endblock %}

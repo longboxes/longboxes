@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ title or "Couldn't load" }} &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+{# Friendly empty-state for any page that couldn't load due to a
+   transient ComicVine failure (rate limit, network blip, CV
+   outage) or a genuine not-found. Routes pick the right
+   ``status_code`` + ``message``; this template just renders the
+   chrome around the message so the user sees the same site
+   navigation they were just on instead of a raw JSON error. #}
+<main class="max-w-6xl mx-auto px-6 py-16">
+  <section class="bg-white border border-slate-200 rounded-lg p-8 text-center space-y-4">
+    <div class="text-5xl select-none" aria-hidden="true">⚠️</div>
+    <h1 class="text-xl font-semibold tracking-tight text-slate-900">
+      {{ title or "Couldn't load this page" }}
+    </h1>
+    <p class="text-sm text-slate-600 max-w-prose mx-auto">
+      {{ message }}
+    </p>
+    {% if hint %}
+      <p class="text-xs text-slate-500 max-w-prose mx-auto">{{ hint }}</p>
+    {% endif %}
+    <div class="pt-2">
+      <a href="/library"
+         class="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
+        ← Back to Library
+      </a>
+    </div>
+  </section>
+</main>
+{% endblock %}

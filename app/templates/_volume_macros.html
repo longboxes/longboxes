@@ -1,0 +1,124 @@
+{# Volume-page shared macros.
+
+   Three macros, used by:
+   * the initial volume.html render,
+   * the /volume/{cv_id}/issues/hydration endpoint that swaps in
+     freshly-hydrated issue rows once their background revalidate
+     jobs drain.
+
+   Keeping them in one importable file lets both renders run
+   through the same Jinja code path; the swapped-in row is
+   byte-for-byte identical to one that arrived hydrated on first
+   load. #}
+
+{% from "_progress_bar.html" import progress_bar %}
+
+{# Build the hover tooltip for a single arc-jump arrow. Shows the arc
+   name, primary book (when present), then whatever destination
+   metadata we have. Falls back gracefully when the sibling issue
+   isn't cached locally — we still have arc name + issue title from
+   the arc payload. #}
+{% macro arrow_tooltip(link, direction) -%}
+  {{ direction }} {{ link.arc.name }}
+  {%- if link.arc.primary_book %} ({{ link.arc.primary_book }}){% endif -%}
+  {%- if link.volume_name %} · {{ link.volume_name }}{% if link.volume_year %} ({{ link.volume_year }}){% endif %}{% endif -%}
+  {%- if link.issue_number %} #{{ link.issue_number }}{% endif -%}
+  {%- if link.issue_name %}: {{ link.issue_name }}{% endif -%}
+{%- endmacro %}
+
+{# Compose the tooltip label for a single arc (legend chip, stripe
+   slot, gallery container). Shows the clean arc name with the
+   parsed parent book in parens when present. #}
+{%- macro arc_tooltip(arc) -%}
+  {{ arc.name }}{% if arc.primary_book %} ({{ arc.primary_book }}){% endif %}
+{%- endmacro %}
+
+{# One row in the volume's issues table.
+
+   Carries ``id="issue-row-<cv_id>"`` + ``data-pending-id`` +
+   ``data-hydrated`` so the auto-refresh helper can find and swap
+   stub-issue rows in place once a background ``revalidate("issue",
+   id)`` job lands. ``i.volume_idx`` (set after ``issues.sort()``) is
+   the row's 0-based position; templates drive per-row ``x-show``
+   against the shared pagination window with it. #}
+{% macro volume_issue_row(detail, i) %}
+  {% set display_name = i.name or ("Issue " ~ (i.issue_number or "?")) %}
+  {% set link_color = "text-slate-900" if i.owned else "text-slate-400" %}
+  {% set issue_arc_ids = i.arc_credits | map(attribute='cv_id') | list %}
+  <tr id="issue-row-{{ i.cv_id }}"
+      data-pending-id="{{ i.cv_id }}"
+      data-hydrated="{{ 'true' if i.is_hydrated else 'false' }}"
+      x-show="{{ i.volume_idx }} >= start && {{ i.volume_idx }} < start + count"
+      class="group border-t border-slate-100 hover:bg-slate-50 hover:outline hover:outline-2 hover:outline-slate-400 hover:-outline-offset-2 {% if not i.owned %}text-slate-400{% endif %}"
+      style="height: var(--row-h);">
+    {# Left-side arc-jump arrows. Each arrow is a colored ← in
+       the arc's color, linking to the previous member of that
+       arc (which lives in another volume). Most rows render
+       an empty cell — arrows appear only at "arc enters this
+       volume" boundaries. #}
+    <td class="py-1 pl-2 pr-0 align-middle leading-tight">
+      {# Only bump arrow size on hover when there's a single
+         arrow in the cell. Stacked arrows growing together can
+         exceed the row's vertical budget and push the row
+         taller — which drifts the rail's node alignment. #}
+      {% set prev_hover_size = "group-hover:text-2xl" if (i.prev_arc_links | length) == 1 else "" %}
+      {% for link in i.prev_arc_links %}
+        <a href="/issue/{{ link.issue_cv_id }}"
+           title="{{ arrow_tooltip(link, '←') }}"
+           class="block text-base {{ prev_hover_size }} leading-none font-semibold transition-[font-size] {{ detail.arc_text_color_classes.get(link.arc.cv_id) }} hover:opacity-70">←</a>
+      {% endfor %}
+    </td>
+    {% if detail.arc_slots %}
+      <td class="p-0 pl-3 md:hidden" style="height: 1px;">
+        <div class="flex gap-px" style="height: 100%;">
+          {% for slot_arc in detail.arc_slots %}
+            <span class="block w-1 {{ detail.arc_color_classes.get(slot_arc.cv_id) if slot_arc.cv_id in issue_arc_ids else '' }}"
+                  style="height: 100%;"
+                  title="{{ arc_tooltip(slot_arc) }}"></span>
+          {% endfor %}
+        </div>
+      </td>
+    {% endif %}
+    {# Cover thumb. The img is ``absolute inset-0`` inside a ``relative``
+       aspect-ratio box — the same pattern the library / arc / issue
+       cards use. An in-flow ``w-full h-full`` img instead leans on the
+       child's percentage height resolving against an aspect-ratio
+       parent; Safari sizes that inconsistently inside a table cell, so
+       the box collapses toward square and ``object-cover`` then renders
+       a zoomed center crop. Pinning the img to all four edges sizes it
+       to the box directly — no percentage-height resolution involved. #}
+    <td class="py-1 px-3 align-middle">
+      <a href="/issue/{{ i.cv_id }}"
+         class="relative block w-10 rounded overflow-hidden border border-slate-200 bg-slate-100 {% if not i.owned %}opacity-60{% endif %}"
+         style="aspect-ratio: 2 / 3;">
+        {% if i.cover_url %}
+          <img src="{{ i.cover_url }}" alt="" loading="lazy" class="absolute inset-0 w-full h-full object-cover">
+        {% endif %}
+        {{ progress_bar(i.progress) }}
+      </a>
+    </td>
+    <td class="py-1 px-3 font-mono align-middle">
+      <a class="hover:underline {{ link_color }}" href="/issue/{{ i.cv_id }}">{{ i.issue_number or "?" }}</a>
+    </td>
+    <td class="py-1 px-3 align-middle">
+      <a class="hover:underline {{ link_color }}" href="/issue/{{ i.cv_id }}">{{ display_name }}</a>
+    </td>
+    <td class="py-1 px-3 text-right align-middle">
+      {% if i.owned %}
+        <span class="inline-block rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5">owned</span>
+      {% else %}
+        <span class="inline-block rounded-full bg-slate-100 text-slate-500 text-xs px-2 py-0.5">missing</span>
+      {% endif %}
+    </td>
+    {# Right-side arc-jump arrows. Mirror of the left column —
+       → arrows for arcs whose next member is in another volume. #}
+    <td class="py-1 pl-0 pr-2 align-middle text-right leading-tight">
+      {% set next_hover_size = "group-hover:text-2xl" if (i.next_arc_links | length) == 1 else "" %}
+      {% for link in i.next_arc_links %}
+        <a href="/issue/{{ link.issue_cv_id }}"
+           title="{{ arrow_tooltip(link, '→') }}"
+           class="block text-base {{ next_hover_size }} leading-none font-semibold transition-[font-size] {{ detail.arc_text_color_classes.get(link.arc.cv_id) }} hover:opacity-70">→</a>
+      {% endfor %}
+    </td>
+  </tr>
+{% endmacro %}

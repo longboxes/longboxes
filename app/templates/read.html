@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} &middot; Reader &middot; Longboxes{% endblock %}
+{% block body %}
+
+{# Phase 6 — the core comic reader. A full-screen, chrome-free page-by-
+   page viewer: it deliberately does NOT include the site header, since
+   the reader owns the whole viewport. Pages are streamed one at a time
+   from /read/{file_id}/page/{n}; navigation is Alpine state. The reader
+   opens at the user's last-read page and saves progress as they read
+   (unless tracking is paused). ``page_count`` is 0 when the archive
+   couldn't be read. #}
+
+<div class="fixed inset-0 bg-slate-900 text-slate-100 flex flex-col select-none"
+     x-data='{
+       page: {{ start_page }},
+       total: {{ page_count }},
+       fit: "height",
+       dir: "{{ reading_direction }}",
+       isFull: false,
+       lastExitFs: 0,
+       saveTimer: 0,
+       track: {{ 'true' if track_progress else 'false' }},
+       pageUrl(n) { return "/read/{{ file_id }}/page/" + n; },
+       next() { if (this.page < this.total - 1) this.page++; },
+       prev() { if (this.page > 0) this.page--; },
+       // Edge taps and the arrow keys move by *physical* direction;
+       // ``dir`` maps that to page order, so RTL (manga) reading flips
+       // which side is "forward".
+       left() { this.dir === "rtl" ? this.next() : this.prev(); },
+       right() { this.dir === "rtl" ? this.prev() : this.next(); },
+       toggleDir() {
+         this.dir = (this.dir === "ltr" ? "rtl" : "ltr");
+         // Persist on the volume so every issue of the series opens
+         // the same way. Fire-and-forget: the UI already flipped, and
+         // a failed save just means the choice will not stick.
+         fetch("/read/{{ file_id }}/direction/" + this.dir, { method: "POST" })
+           .catch(() => {});
+       },
+       toggleFullscreen() {
+         if (document.fullscreenElement) {
+           document.exitFullscreen();
+         } else {
+           document.documentElement.requestFullscreen().catch(() => {});
+         }
+       },
+       saveProgress() {
+         // No-op while progress tracking is paused (incognito reading).
+         if (!this.track) return;
+         // Debounced — collapse a fast run of page flips into one write.
+         clearTimeout(this.saveTimer);
+         this.saveTimer = setTimeout(() => this.flushProgress(false), 700);
+       },
+       flushProgress(beacon) {
+         // Persist the current page for this user; ``total`` rides
+         // along so the server knows when the last page is reached.
+         // Skipped entirely while tracking is paused.
+         if (!this.track || this.total < 1) return;
+         const url = "/read/{{ file_id }}/progress/" + this.page
+                     + "?total=" + this.total;
+         if (beacon && navigator.sendBeacon) {
+           navigator.sendBeacon(url);
+         } else {
+           fetch(url, { method: "POST", keepalive: true }).catch(() => {});
+         }
+       },
+       onKey(e) {
+         if (e.key === "ArrowRight") {
+           this.right(); e.preventDefault();
+         } else if (e.key === "ArrowLeft") {
+           this.left(); e.preventDefault();
+         } else if (e.key === " " || e.key === "PageDown") {
+           // Space / PageDown always advance — they are not directional.
+           this.next(); e.preventDefault();
+         } else if (e.key === "PageUp") {
+           this.prev(); e.preventDefault();
+         } else if (e.key === "Home") {
+           this.page = 0; e.preventDefault();
+         } else if (e.key === "End") {
+           this.page = Math.max(0, this.total - 1); e.preventDefault();
+         } else if (e.key === "Escape") {
+           e.preventDefault();
+           if (document.fullscreenElement) {
+             // In fullscreen: the first Escape just drops back to the
+             // windowed reader.
+             document.exitFullscreen();
+           } else if (Date.now() - this.lastExitFs > 300) {
+             // Otherwise Escape closes the reader — but not when this
+             // press is the stray keydown from a fullscreen exit that
+             // just happened (browsers differ on whether they deliver
+             // it), so one Escape never both exits AND closes.
+             this.close();
+           }
+         }
+       },
+       close() {
+         // Flush the latest position before leaving the reader.
+         this.flushProgress(true);
+         if (history.length > 1) history.back();
+         else window.location.assign("/library");
+       },
+       init() {
+         // Preload the next page so a forward flip is instant.
+         this.$watch("page", (n) => {
+           if (n + 1 < this.total) {
+             const img = new Image();
+             img.src = this.pageUrl(n + 1);
+           }
+           // A new page starts at the top — in fit-width the previous
+           // page may have been scrolled partway down.
+           if (this.$refs.stage) this.$refs.stage.scrollTop = 0;
+           // Persist the new position (debounced).
+           this.saveProgress();
+         });
+         // Track fullscreen however it changed — our button, F11, or
+         // the browser itself — so the toolbar label stays correct.
+         document.addEventListener("fullscreenchange", () => {
+           this.isFull = !!document.fullscreenElement;
+           // Stamp the moment we leave fullscreen, so a stray Escape
+           // keydown right after does not also close the reader.
+           if (!this.isFull) this.lastExitFs = Date.now();
+         });
+         // A debounced save may still be pending when the tab is hidden
+         // or closed — flush it with sendBeacon so the position sticks.
+         window.addEventListener("pagehide", () => this.flushProgress(true));
+       }
+     }'
+     @keydown.window="onKey($event)">
+
+  {# Toolbar — thin, always visible: close · title · page counter ·
+     fit · reading-direction · fullscreen toggles. #}
+  <div class="shrink-0 flex items-center gap-3 px-3 sm:px-4 h-11 bg-slate-950/85 border-b border-white/10 text-sm">
+    <button type="button" @click="close()"
+            class="shrink-0 text-slate-300 hover:text-white">&larr; Close</button>
+    <span class="flex-1 min-w-0 truncate text-slate-400">{{ title }}</span>
+    {% if page_count %}
+      <span class="shrink-0 tabular-nums text-slate-400"
+            x-text="(page + 1) + ' / ' + total"></span>
+      {# Labelled with the action — what clicking switches you TO, not
+         the current mode. #}
+      <button type="button"
+              @click="fit = (fit === 'height' ? 'width' : 'height')"
+              class="shrink-0 rounded border border-white/15 px-2 py-0.5 text-xs text-slate-300 hover:bg-white/10"
+              x-text="fit === 'height' ? 'Fit width' : 'Fit height'"></button>
+      {# Reading-direction toggle — labelled with what it switches TO,
+         matching the fit button. RTL flips the arrow keys and edge
+         taps for manga / right-to-left books. The choice is saved to
+         the volume, so it persists across issues and sessions. #}
+      <button type="button"
+              @click="toggleDir()"
+              class="shrink-0 rounded border border-white/15 px-2 py-0.5 text-xs text-slate-300 hover:bg-white/10"
+              :title="dir === 'ltr' ? 'Switch to right-to-left (manga) reading' : 'Switch to left-to-right reading'"
+              x-text="dir === 'ltr' ? 'L ← R' : 'L → R'"></button>
+    {% endif %}
+    {# Fullscreen toggle — works even with no pages, so it sits outside
+       the page-count guard. ``isFull`` is kept in sync by the
+       fullscreenchange listener wired up in init(). #}
+    <button type="button" @click="toggleFullscreen()"
+            class="shrink-0 rounded border border-white/15 px-2 py-0.5 text-xs text-slate-300 hover:bg-white/10"
+            x-text="isFull ? 'Exit full screen' : 'Full screen'"></button>
+  </div>
+
+  {% if not page_count %}
+    {# Archive unreadable or empty — nothing to page through. #}
+    <div class="flex-1 flex items-center justify-center px-6 text-center text-sm text-slate-400">
+      This file's pages couldn't be read.
+    </div>
+  {% else %}
+    {# Page stage. The image fills the height (whole page visible) or
+       the width (taller — scroll down); clicking it advances.
+
+       Fit-height: the ``<img>`` BOX is ``h-full w-full`` (so a short
+       page still scales up to fill the stage) and ``object-contain``
+       handles the actual bitmap — it scales the page within those
+       bounds preserving the aspect ratio. This matters for landscape
+       pages on a phone: under the older ``h-full w-auto`` rule the
+       Tailwind preflight's implicit ``max-width: 100%`` would cap the
+       width while ``height: 100%`` was still forcing the full height,
+       smushing the page. With ``object-contain`` the bitmap fits to
+       whichever dimension reaches the bound first, so landscape pages
+       letterbox cleanly and portrait pages still fill the height.
+
+       Fit-width: unchanged — image fits the stage width, height
+       follows the natural ratio, and the stage's ``overflow-auto``
+       lets a tall page scroll vertically. #}
+    <div class="flex-1 overflow-auto" x-ref="stage">
+      <img :src="pageUrl(page)" alt="" @click="next()"
+           class="block mx-auto cursor-pointer"
+           :class="fit === 'width' ? 'w-full h-auto' : 'h-full w-full object-contain'">
+    </div>
+
+    {# Edge arrows — visible nav affordance for mouse / touch; keyboard
+       (←/→, space, Home/End) and clicking the page also work. The
+       glyphs stay physically left / right; ``left()`` / ``right()``
+       and the x-show guards follow the reading direction. #}
+    <button type="button" @click="left()" x-cloak
+            x-show="dir === 'rtl' ? page < total - 1 : page > 0"
+            :aria-label="dir === 'rtl' ? 'Next page' : 'Previous page'"
+            class="fixed left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                   bg-slate-950/60 hover:bg-slate-950/90 text-2xl leading-none
+                   flex items-center justify-center">&lsaquo;</button>
+    <button type="button" @click="right()" x-cloak
+            x-show="dir === 'rtl' ? page > 0 : page < total - 1"
+            :aria-label="dir === 'rtl' ? 'Previous page' : 'Next page'"
+            class="fixed right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                   bg-slate-950/60 hover:bg-slate-950/90 text-2xl leading-none
+                   flex items-center justify-center">&rsaquo;</button>
+  {% endif %}
+</div>
+{% endblock %}

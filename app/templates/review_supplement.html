@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Attach as supplement &middot; Review &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+{% from "_format_macros.html" import format_badge, volume_info_popover %}
+{% from "_reader_link.html" import reader_link %}
+
+{# Phase 11F — attach a non-issue file (a cover gallery, extras
+   archive) to a real ComicVine volume as a supplement. Search CV for
+   the volume; each result carries an inline attach form. The supplement
+   is volume-level — there's no issue to pick. #}
+
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/review/{{ review.file_id }}" class="hover:underline">&larr; Back to file review</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Attach as a supplement</h1>
+    <p class="text-sm text-slate-600">
+      This file isn't an issue &mdash; it's supplemental content (a
+      cover gallery, sketch pages, extras) for a series that <em>is</em>
+      in ComicVine. Find that volume below and attach the file to it.
+    </p>
+  </div>
+
+  {# Reference card — the file being attached. #}
+  <section class="bg-white border border-slate-200 rounded-lg p-4 flex items-start gap-4">
+    <div class="relative w-16 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+      <img src="/review/file/{{ review.file_id }}/cover" alt="" class="w-full h-full object-cover">
+      {{ reader_link(review.file_id) }}
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-xs uppercase tracking-wide text-slate-400">Attaching this file</div>
+      <div class="text-sm font-medium text-slate-900 break-all">{{ review.filename }}</div>
+      <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3">
+        <span class="text-slate-400">parsed:</span>
+        {% set display_series = review.parsed_long_series if (review.parsed_long_series and review.parsed_long_series != review.parsed_series) else review.parsed_series %}
+        <span>series
+          {% if display_series %}<span class="font-mono text-slate-700">{{ display_series }}</span>
+          {% else %}<span class="text-slate-300">&mdash;</span>{% endif %}
+        </span>
+        <span>year
+          {% if review.parsed_year %}<span class="font-mono text-slate-700">{{ review.parsed_year }}</span>
+          {% else %}<span class="text-slate-300">&mdash;</span>{% endif %}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  {# Volume search — GET so the query lands in the URL. #}
+  <form method="get" action="/review/{{ review.file_id }}/supplement"
+        class="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-end gap-3">
+    <label class="flex flex-col flex-1 min-w-0">
+      <span class="text-xs text-slate-500 mb-1">Volume name</span>
+      <input type="text" name="q" value="{{ query }}" autofocus
+             placeholder="e.g. Saga"
+             class="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+    </label>
+    <button type="submit"
+            class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800">
+      Search
+    </button>
+  </form>
+
+  {% if cleaned_query and cleaned_query != query %}
+    <p class="text-xs text-slate-500">
+      Searched ComicVine for
+      <span class="font-mono text-slate-700">{{ cleaned_query }}</span>
+      &mdash; punctuation stripped.
+    </p>
+  {% endif %}
+
+  {% if error %}
+    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      {{ error }}
+    </div>
+  {% elif results %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      {% for v in results %}
+        {# Each result is a card with an inline attach form — no whole-
+           card link, since attaching is a POST. #}
+        <div class="flex items-start gap-3 bg-white border border-slate-200 rounded-lg p-3">
+          <div class="w-14 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+            {% if v.cover_url %}
+              <img src="{{ v.cover_url }}" alt="" loading="lazy"
+                   class="w-full h-full object-cover">
+            {% endif %}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-slate-900">
+              {{ v.name }}
+              {% if v.year %}<span class="text-slate-400 font-normal">({{ v.year }})</span>{% endif %}
+              {{ volume_info_popover(v.description) }}
+            </div>
+            <div class="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              {{ format_badge(v.format) }}
+              <span>
+                {% if v.publisher %}{{ v.publisher }}{% endif %}
+                {% if v.issue_count is not none %}
+                  {% if v.publisher %}&middot;{% endif %}
+                  {{ v.issue_count }} issue{{ "s" if v.issue_count != 1 else "" }}
+                {% endif %}
+              </span>
+            </div>
+            <form method="post" action="/review/{{ review.file_id }}/supplement"
+                  class="mt-2 flex items-center gap-2 flex-wrap">
+              <input type="hidden" name="volume_cv_id" value="{{ v.cv_id }}">
+              {% if supplement_types|length > 1 %}
+                <select name="supplement_type"
+                        class="rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+                  {% for key, label in supplement_types %}
+                    <option value="{{ key }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              {% else %}
+                {# One wired type — submit it as a hidden field and name
+                   it on the button. #}
+                <input type="hidden" name="supplement_type" value="{{ supplement_types[0][0] }}">
+              {% endif %}
+              <button type="submit"
+                      class="rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-1.5 hover:bg-slate-800">
+                {% if supplement_types|length > 1 %}Attach{% else %}Attach as {{ supplement_types[0][1]|lower }}{% endif %}
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% elif cleaned_query %}
+    <div class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+      No ComicVine volumes matched
+      <span class="font-mono text-slate-700">{{ cleaned_query }}</span>.
+      Try a shorter or differently-worded name.
+    </div>
+  {% else %}
+    <div class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+      Enter a volume name above to search ComicVine.
+    </div>
+  {% endif %}
+</main>
+{% endblock %}

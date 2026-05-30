@@ -1,0 +1,65 @@
+{# Shared per-arc rendering for the publisher page.
+
+   Two macros — list_row (a <tr>) and gallery_card (a <li> grid
+   tile). Each carries:
+
+   * ``id="list-arc-<N>"`` / ``id="gallery-arc-<N>"`` so the
+     hydration-polling JS can locate exactly the right element to
+     swap (the two views render the same arc twice but in different
+     containers, so view-prefixed IDs avoid id collisions when both
+     are present in the DOM under x-show).
+   * ``data-arc-id="<N>"`` so a querySelectorAll over the page can
+     enumerate which arcs are visible at all (used by Alpine to
+     pick up the freshly-loaded batch's pending IDs after a
+     loadMore append).
+   * ``data-hydrated="true|false"`` so the same enumeration can
+     filter to just the ones still waiting on a background CV
+     fetch. Hydrated rows have a cover; unhydrated ones don't yet. #}
+{% macro list_row(a) %}
+  <tr id="list-arc-{{ a.cv_id }}"
+      data-pending-id="{{ a.cv_id }}"
+      data-hydrated="{{ 'true' if a.is_hydrated else 'false' }}"
+      class="border-t border-slate-100 hover:bg-slate-50">
+    <td class="py-1 px-3 align-middle">
+      <a href="/arc/{{ a.cv_id }}"
+         class="block w-10 rounded overflow-hidden border border-slate-200 bg-slate-100"
+         style="aspect-ratio: 2 / 3;">
+        {% if a.cover_url %}
+          <img src="{{ a.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+        {% endif %}
+      </a>
+    </td>
+    <td class="py-1 px-3 align-middle">
+      <a class="text-slate-900 hover:underline" href="/arc/{{ a.cv_id }}">{{ a.name }}</a>
+    </td>
+    <td class="py-1 px-3 align-middle text-slate-500">
+      {{ a.primary_book or "—" }}
+    </td>
+  </tr>
+{% endmacro %}
+
+{% macro gallery_card(a) %}
+  <li id="gallery-arc-{{ a.cv_id }}"
+      data-pending-id="{{ a.cv_id }}"
+      data-hydrated="{{ 'true' if a.is_hydrated else 'false' }}"
+      class="min-w-0">
+    <a href="/arc/{{ a.cv_id }}" class="block group">
+      <div class="relative w-full bg-slate-100 rounded-md overflow-hidden border border-slate-200" style="aspect-ratio: 2 / 3;">
+        {% if a.cover_url %}
+          <img src="{{ a.cover_url }}" alt="{{ a.name }} cover" loading="lazy"
+               class="absolute inset-0 w-full h-full object-cover transition-opacity group-hover:opacity-80">
+        {% else %}
+          <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400 px-2 text-center">
+            {{ a.name }}
+          </div>
+        {% endif %}
+      </div>
+      <div class="mt-2 text-sm">
+        <div class="font-medium text-slate-900 line-clamp-2">{{ a.name }}</div>
+        {% if a.primary_book %}
+          <div class="text-slate-500 text-xs line-clamp-1">{{ a.primary_book }}</div>
+        {% endif %}
+      </div>
+    </a>
+  </li>
+{% endmacro %}

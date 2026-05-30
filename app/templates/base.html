@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Longboxes{% endblock %}</title>
+  {# Favicons — RealFaviconGenerator output. Files live at
+     ``app/static/favicons/`` and are served from root paths by
+     explicit handlers in ``app/main.py`` (root-path serving is the
+     browser convention for favicons and is what ``site.webmanifest``
+     references the PNG icons by). #}
+  <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Longboxes">
+  <link rel="manifest" href="/site.webmanifest">
+  {# Phase 9 polish will replace these CDNs with a built tailwind.css.
+     Until then: typography plugin (for .prose), Alpine.js for the small
+     amount of client-side state we need (expand/collapse, modals later). #}
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  {# ``setupAutoRefresh`` and ``setupPagination`` globals used by
+     entity pages — auto-refresh drives the poll-and-swap hydration
+     loop, pagination manages the start/count window arithmetic.
+     Volume and arc pages compose both. Loaded before Alpine (also
+     deferred) so the globals are defined by the time Alpine
+     processes any x-data referencing them. #}
+  <script defer src="{{ static_url('auto-refresh.js') }}"></script>
+  <script defer src="{{ static_url('pagination.js') }}"></script>
+  {# Letterboxes landscape covers (digital comics) so they aren't
+     center-cropped to a sliver in the 2:3 cover boxes. #}
+  <script defer src="{{ static_url('cover-fit.js') }}"></script>
+  {# ``setupTabs`` — Alpine x-data factory for the tabbed entity pages
+     (character, creator). Deferred, before Alpine, so it's defined
+     when Alpine processes the x-data. #}
+  <script defer src="{{ static_url('entity-tabs.js') }}"></script>
+  {# ``setupSearchDropdown`` — Alpine x-data factory for the header
+     search box's live dropdown (debounced fetch + keyboard nav). #}
+  <script defer src="{{ static_url('search-dropdown.js') }}"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.7/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen flex flex-col">
+  <div class="flex-1">
+    {% block body %}{% endblock %}
+  </div>
+  {# Global ComicVine attribution. Rendered on every page so we're
+     covered for any page that shows CV-derived data (most of them).
+     Per-item click-outs to the canonical CV detail page live as a
+     badge on the banner heroes via ``_cv_badge.html``. #}
+  <footer class="border-t border-slate-200 mt-12">
+    <div class="max-w-6xl mx-auto px-6 py-4 text-xs text-slate-500">
+      Data provided by
+      <a href="https://comicvine.gamespot.com"
+         target="_blank" rel="noopener noreferrer"
+         class="hover:text-slate-800 hover:underline">ComicVine</a>.
+    </div>
+  </footer>
+</body>
+</html>

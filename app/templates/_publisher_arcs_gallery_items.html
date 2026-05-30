@@ -1,0 +1,4 @@
+{# Inner-only render of arc grid cards for the publisher page's
+   infinite-scroll fragment endpoint. Empty response = end of list. #}
+{% from "_publisher_arc_card.html" import gallery_card %}
+{% for a in arcs %}{{ gallery_card(a) }}{% endfor %}

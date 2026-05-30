@@ -1,0 +1,4 @@
+{# Inner-only render of arc table rows for the publisher page's
+   infinite-scroll fragment endpoint. Empty response = end of list. #}
+{% from "_publisher_arc_card.html" import list_row %}
+{% for a in arcs %}{{ list_row(a) }}{% endfor %}

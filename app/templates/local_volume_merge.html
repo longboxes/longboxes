@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Merge volume &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+{# Phase 11E — merge another local volume into this one. ``volume`` is
+   the target (a ``LocalVolumeDetail``); ``other_volumes`` is every
+   other local volume, serialised to JSON for a client-side lookup.
+   Picking one and submitting reassigns its issues here and deletes it. #}
+
+<main class="max-w-2xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/local/volume/{{ volume.id }}" class="hover:underline">&larr; Back to volume</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Merge into this volume</h1>
+    <p class="text-sm text-slate-600">
+      Fold a duplicate local volume into
+      <span class="font-medium text-slate-800">{{ volume.name }}</span>.
+      Every issue from the volume you pick moves here, then that volume
+      is deleted. Files aren't affected — they move with their issues.
+      Duplicate issue numbers can be fixed afterward by editing.
+    </p>
+  </div>
+
+  {% if other_volumes %}
+    {# ``x-data`` single-quoted so the ``tojson`` payloads embed safely;
+       JS string literals below therefore use double quotes. #}
+    <form method="post" action="/local/volume/{{ volume.id }}/merge"
+          x-data='{
+            volumes: {{ other_volumes | tojson }},
+            targetName: {{ volume.name | tojson }},
+            query: "",
+            selectedId: "",
+            selectedName: "",
+            showList: false,
+            matches() {
+              const q = this.query.trim().toLowerCase();
+              const list = q
+                ? this.volumes.filter(v => v.name.toLowerCase().includes(q))
+                : this.volumes;
+              return list.slice(0, 8);
+            },
+            pick(v) {
+              this.selectedId = v.id;
+              this.selectedName = v.name;
+              this.query = v.name;
+              this.showList = false;
+            }
+          }'
+          @submit='if (!selectedId || !window.confirm(
+              `Merge “${selectedName}” into “${targetName}”? `
+              + `“${selectedName}” will be deleted.`)) $event.preventDefault()'
+          class="bg-white border border-slate-200 rounded-lg p-4 sm:p-5 space-y-4">
+
+      <div class="relative" @click.away="showList = false">
+        <label class="block">
+          <span class="text-xs text-slate-500">Volume to merge in</span>
+          <input type="text" autocomplete="off"
+                 x-model="query"
+                 @focus="showList = true"
+                 @input="showList = true; if (selectedId) selectedId = ''"
+                 placeholder="Search local volumes…"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+        </label>
+        {# Carries the picked volume's id; the submit guard blocks an
+           empty pick, and the route rejects a bad/missing id too. #}
+        <input type="hidden" name="source_volume_id" :value="selectedId">
+
+        <div x-show="showList && matches().length > 0" x-cloak
+             class="absolute z-20 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+          <template x-for="v in matches()" :key="v.id">
+            <button type="button" @click="pick(v)"
+                    class="block w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-b-0">
+              <span class="text-sm font-medium text-slate-900" x-text="v.name"></span>
+              <span class="text-sm text-slate-400" x-text="v.year ? ' (' + v.year + ')' : ''"></span>
+              <span class="block text-xs text-slate-400" x-text="v.publisher_name || ''"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <div class="text-xs">
+        <template x-if="selectedId">
+          <span class="text-amber-700">
+            <span class="font-medium" x-text="selectedName"></span>
+            and all its issues will be merged into {{ volume.name }},
+            then deleted.
+          </span>
+        </template>
+        <template x-if="!selectedId">
+          <span class="text-slate-500">Pick a local volume to merge in.</span>
+        </template>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+        <button type="submit" :disabled="!selectedId"
+                class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">
+          Merge
+        </button>
+        <a href="/local/volume/{{ volume.id }}"
+           class="text-sm text-slate-600 hover:text-slate-900">Cancel</a>
+      </div>
+    </form>
+  {% else %}
+    <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-600">
+      There are no other local volumes to merge in.
+      <a href="/local/volume/{{ volume.id }}" class="text-slate-800 hover:underline">Back to the volume</a>.
+    </div>
+  {% endif %}
+</main>
+{% endblock %}

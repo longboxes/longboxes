@@ -1,0 +1,79 @@
+{# Paginated entity-card grid — the body of the character page's
+   Friends / Enemies / Teams tabs, and the creator page's Created
+   characters / Story arcs tabs.
+
+   ``character_people`` args:
+     items       — current page's window of ``EntityCard``s
+     total       — full count (before any letter filter)
+     page / page_count — 1-based pager position
+     param       — pager query param ("fpage" / "epage" / "cpage" ...)
+     anchor      — id the pager links re-anchor to
+     noun        — singular item noun ("friend" / "character" ...)
+     href_prefix — card link prefix ("/character/" / "/team/" / "/arc/")
+     letter      — active alphabet-bar letter (A-Z / "#"), or None
+     letter_param — query param the alphabet bar sets ("cletter" /
+                   "aletter"); its PRESENCE switches on the alphabet
+                   bar (the friends/enemies/teams tabs omit it)
+     filtered_count — item count after the letter filter
+
+   Pagination + filtering are server-side; the route hydrates the
+   displayed window's entities, so an initials-fallback avatar gains
+   its icon on a later render. #}
+{% from "_person_card.html" import person_card %}
+{% from "_credit_shelves.html" import credit_alphabet %}
+
+{# Windowed numbered pager — page 1 + last pinned, the current page in
+   a ±2 window, gaps collapsed to an ellipsis. Links carry ``?{param}=``
+   + ``#{anchor}``, and preserve the active letter when filtering. #}
+{% macro _people_pager(page, page_count, param, anchor, letter=none, letter_param=none) %}
+  {% if page_count > 1 %}
+    {% set lq = ('&' ~ letter_param ~ '=' ~ (letter | urlencode)) if (letter and letter_param) else '' %}
+    {% set tab_base = "text-center text-xs rounded-t-md border transition-colors select-none px-3" %}
+    {% set tab_active = "bg-white text-slate-900 font-semibold border-slate-300 shadow-sm relative z-10 py-2" %}
+    {% set tab_idle = "bg-slate-100 text-slate-500 font-medium border-slate-200 hover:bg-slate-50 hover:text-slate-700 py-1.5" %}
+    {% set lo = [page - 2, 1] | max %}
+    {% set hi = [page + 2, page_count] | min %}
+    <nav class="mt-5 flex flex-wrap items-end gap-px" aria-label="Pages">
+      {% if lo > 1 %}
+        <a href="?{{ param }}=1{{ lq }}#{{ anchor }}" class="{{ tab_base }} {{ tab_idle }}">1</a>
+        {% if lo > 2 %}<span class="px-2 py-1.5 text-xs text-slate-400 select-none">&hellip;</span>{% endif %}
+      {% endif %}
+      {% for n in range(lo, hi + 1) %}
+        <a href="?{{ param }}={{ n }}{{ lq }}#{{ anchor }}"
+           class="{{ tab_base }} {{ tab_active if n == page else tab_idle }}">{{ n }}</a>
+      {% endfor %}
+      {% if hi < page_count %}
+        {% if hi < page_count - 1 %}<span class="px-2 py-1.5 text-xs text-slate-400 select-none">&hellip;</span>{% endif %}
+        <a href="?{{ param }}={{ page_count }}{{ lq }}#{{ anchor }}" class="{{ tab_base }} {{ tab_idle }}">{{ page_count }}</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endmacro %}
+
+{% macro character_people(items, total, page, page_count, param, anchor, noun, href_prefix, letter=none, letter_param=none, filtered_count=none) %}
+  {% set plural = (noun[:-1] ~ "ies") if noun.endswith("y") else noun ~ "s" %}
+  {% if total %}
+    <div class="text-sm text-slate-500 mb-3">
+      {{ total }} {{ noun if total == 1 else plural }}
+      {%- if letter %} &middot; {{ filtered_count }} starting with {{ letter }}{% endif %}
+    </div>
+    {% if letter_param %}{{ credit_alphabet(letter, letter_param, anchor) }}{% endif %}
+    {% if items %}
+      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2{{ ' mt-4' if letter_param else '' }}">
+        {% for person in items %}
+          <li>{{ person_card(href_prefix ~ person.cv_id, person.name,
+                              person.icon_url, person.badge) }}</li>
+        {% endfor %}
+      </ul>
+      {{ _people_pager(page, page_count, param, anchor, letter, letter_param) }}
+    {% elif letter %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-500 mt-4">
+        No {{ plural }} starting with {{ letter }}.
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-500">
+      No {{ plural }} are recorded.
+    </div>
+  {% endif %}
+{% endmacro %}

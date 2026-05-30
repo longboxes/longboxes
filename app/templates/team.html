@@ -1,0 +1,130 @@
+{% extends "_entity_page.html" %}
+{% from "_wiki_card.html" import wiki_about_block %}
+{% from "_publisher_chip.html" import publisher_chip %}
+{% from "_entity_hero.html" import entity_hero %}
+{% from "_sidebar.html" import sidebar_section, sidebar_nav_link, mobile_meta_row %}
+{% from "_character_people.html" import character_people %}
+{% from "_team_info_card.html" import team_info_card %}
+{% from "_volume_credits.html" import volume_credits_list %}
+{% from "_tabs.html" import tab_bar %}
+
+{# The /team/{cv_id} page — a ComicVine team. A banner hero (matching
+   the character page), the CV wiki "About" card, then a tabbed area:
+   Members (a paginated avatar grid) and — populated in later chunks —
+   Friends, Enemies and Volumes. The sidebar carries the "General
+   Information" card. ``detail`` is a ``TeamDetail`` (see
+   app/services/library.py). #}
+
+{% block title %}{{ detail.name }} &middot; Longboxes{% endblock %}
+
+{% block content %}
+  {% call(meta_class, subtle_class, is_banner) entity_hero(
+      title=detail.name,
+      banner_url=detail.banner_url,
+      banner_cover=true,
+      cover_url=detail.cover_url,
+      cover_alt=detail.name ~ ' logo',
+      cv_site_url=(detail.team.raw_payload or {}).get('site_detail_url'),
+      breadcrumbs=[{"label": "Library", "href": "/library"}],
+      deck=detail.deck,
+      deck_hide_mobile=true
+  ) %}
+    {% if detail.members_total %}
+      <div class="text-sm {{ meta_class }}">
+        <span class="font-medium">{{ detail.members_total }}</span>
+        member{{ "s" if detail.members_total != 1 else "" }}
+      </div>
+    {% endif %}
+  {% endcall %}
+
+  {{ mobile_meta_row(publisher) }}
+
+  {{ wiki_about_block(
+       detail.description,
+       banner_url=detail.banner_url,
+       breadcrumbs=[{"label": "Library", "href": "/library"}]
+  ) }}
+
+  {# Tabbed sections — see app/static/entity-tabs.js. The active tab is
+     mirrored to the URL hash so it survives the pagination reloads. #}
+  <div id="lists"
+       x-data="setupTabs(['members', 'friends', 'enemies', 'volumes', 'arcs'])">
+    {{ tab_bar([
+         ("members", "Members"), ("friends", "Friends"),
+         ("enemies", "Enemies"), ("volumes", "Volumes"),
+         ("arcs", "Story arcs")],
+         "Team sections") }}
+
+    {# Members — the primary tab, deliberately NOT x-cloak'd so it
+       survives an Alpine load failure. #}
+    <div x-show="tab === 'members'" role="tabpanel" id="members">
+      {{ character_people(
+           detail.members, detail.members_total,
+           detail.members_page, detail.members_page_count,
+           "page", "members", "member", "/character/") }}
+    </div>
+
+    {# Friends — characters CV lists as allies of the team, a paginated
+       grid (cards link to /character/). #}
+    <div x-show="tab === 'friends'" x-cloak role="tabpanel" id="friends">
+      {{ character_people(
+           detail.friends, detail.friends_total,
+           detail.friends_page, detail.friends_page_count,
+           "fpage", "friends", "friend", "/character/") }}
+    </div>
+
+    {# Enemies — characters CV lists as foes of the team. #}
+    <div x-show="tab === 'enemies'" x-cloak role="tabpanel" id="enemies">
+      {{ character_people(
+           detail.enemies, detail.enemies_total,
+           detail.enemies_page, detail.enemies_page_count,
+           "epage", "enemies", "enemy", "/character/") }}
+    </div>
+
+    {# Volumes — volumes the team is credited on, same as the creator
+       page (its own ``?vpage=`` pager + ``?vletter=`` alphabet bar). #}
+    <div x-show="tab === 'volumes'" x-cloak role="tabpanel" id="volumes">
+      {{ volume_credits_list(
+           detail.volumes, detail.volumes_total,
+           detail.volumes_page, detail.volumes_page_count,
+           "vpage", "volumes",
+           "No credited volumes are recorded for this team yet.",
+           letter=detail.volumes_letter, letter_param="vletter",
+           filtered_count=detail.volumes_filtered_count,
+           credit_param="team:" ~ detail.team.cv_id) }}
+    </div>
+
+    {# Story arcs — arcs the team is credited on; cards link to /arc/. #}
+    <div x-show="tab === 'arcs'" x-cloak role="tabpanel" id="arcs">
+      {{ character_people(
+           detail.story_arcs, detail.story_arcs_total,
+           detail.story_arcs_page, detail.story_arcs_page_count,
+           "apage", "arcs", "story arc", "/arc/",
+           letter=detail.story_arcs_letter,
+           letter_param="aletter",
+           filtered_count=detail.story_arcs_filtered_count) }}
+    </div>
+  </div>
+{% endblock %}
+
+{% block sidebar_nav_links %}
+  {% if detail.description %}{{ sidebar_nav_link("#about", "About") }}{% endif %}
+  {{ sidebar_nav_link("#lists", "Lists") }}
+{% endblock %}
+
+{% block sidebar_extras %}
+  {% if publisher %}
+    {% call sidebar_section("Publisher") %}
+      {{ publisher_chip(publisher) }}
+    {% endcall %}
+  {% endif %}
+  {# CV-sourced facts — aliases, first appearance, disbanded-in. Shown
+     only when the payload carried at least one of them, so the team
+     page doesn't get an empty card. #}
+  {% if detail.info.aliases or detail.info.first_appearance
+        or detail.info.disbanded_in %}
+    {% call sidebar_section("General Information") %}
+      {{ team_info_card(detail.info) }}
+    {% endcall %}
+  {% endif %}
+{% endblock %}

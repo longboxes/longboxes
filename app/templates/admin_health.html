@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}Library health &middot; Longboxes{% endblock %}
+
+{% macro pct(v) %}{{ "%.1f%%"|format((v or 0) * 100) }}{% endmacro %}
+{% macro fmt_bytes(n) -%}
+{%- if n >= 1073741824 -%}{{ "%.1f GB"|format(n / 1073741824) }}
+{%- elif n >= 1048576 -%}{{ "%.1f MB"|format(n / 1048576) }}
+{%- elif n >= 1024 -%}{{ "%.1f KB"|format(n / 1024) }}
+{%- else -%}{{ n }} B
+{%- endif -%}
+{%- endmacro %}
+
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-4xl mx-auto px-6 py-6 space-y-6">
+  <h1 class="text-2xl font-semibold tracking-tight">Library health</h1>
+
+  {# Background-job queue — rendered above the empty-state guard so it's
+     visible mid-scan, before any files rows exist. Point-in-time: reload
+     to refresh. #}
+  <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+    <h2 class="text-lg font-medium">Background jobs</h2>
+    {% if queue is none %}
+      <p class="text-sm text-slate-600">Queue status unavailable — couldn't reach Redis.</p>
+    {% else %}
+      <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <dt class="text-slate-600">Queued (waiting to run)</dt>
+        <dd class="font-medium">{{ queue.queued }}</dd>
+
+        <dt class="text-slate-600">Scheduled (waiting out a delay)</dt>
+        <dd class="font-medium">{{ queue.scheduled }}</dd>
+
+        <dt class="text-slate-600">Running now</dt>
+        <dd class="font-medium">{{ queue.started }}</dd>
+
+        <dt class="text-slate-600">Failed</dt>
+        <dd class="font-medium{% if queue.failed %} text-red-600{% endif %}">
+          {% if queue.failed %}
+            <a href="/admin/failed-jobs" class="hover:underline">{{ queue.failed }}</a>
+          {% else %}
+            {{ queue.failed }}
+          {% endif %}
+        </dd>
+
+        <dt class="text-slate-600 font-medium">Outstanding (not yet finished)</dt>
+        <dd class="font-semibold">{{ queue.outstanding }}</dd>
+      </dl>
+      <p class="text-xs text-slate-500">
+        Match and revalidation jobs share one queue. <strong>Queued</strong> drains as the worker picks jobs up; <strong>scheduled</strong> holds jobs re-enqueued after a ComicVine rate-limit cool-down. This is a snapshot — reload the page to refresh.
+      </p>
+    {% endif %}
+
+    {# Per-file failure inventory — separate from the RQ failed
+       registry because it counts files (one row per broken
+       archive / unreadable cover / bad ComicInfo) instead of job
+       executions. Linked-out when non-zero so the inspector is one
+       click from here. #}
+    <div class="mt-4 pt-3 border-t border-slate-100 text-sm">
+      <div class="flex items-baseline justify-between gap-3">
+        <div class="text-slate-600">
+          Files with errors
+          <span class="block text-xs text-slate-500">Archive open / cover extraction / ComicInfo parse</span>
+        </div>
+        <div class="font-medium{% if file_errors_count %} text-red-600{% endif %}">
+          {% if file_errors_count %}
+            <a href="/admin/file-errors" class="hover:underline">{{ file_errors_count }}</a>
+          {% else %}
+            {{ file_errors_count }}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# Empty-state guard #}
+  {% if report.total_files == 0 %}
+    <section class="bg-white border border-slate-200 rounded-lg p-6">
+      <p class="text-sm text-slate-600">No files indexed yet. Once a scan completes, this page will show match readiness, duplicate footprint, and projected vs observed auto-match rate.</p>
+    </section>
+  {% else %}
+
+    <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+      <h2 class="text-lg font-medium">Library</h2>
+      <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <dt class="text-slate-600">Unique content (<code>files</code> rows)</dt>
+        <dd class="font-medium">{{ report.total_files }}</dd>
+
+        <dt class="text-slate-600">Current locations on disk</dt>
+        <dd class="font-medium">{{ report.total_locations }}</dd>
+
+        <dt class="text-slate-600">Duplicate content (files with &gt;1 location)</dt>
+        <dd class="font-medium{% if hash_dup_groups %} text-amber-700{% endif %}">
+          {% if hash_dup_groups %}
+            <a href="/admin/duplicates" class="hover:underline">{{ report.duplicate_files_count }}</a>
+          {% else %}
+            {{ report.duplicate_files_count }}
+          {% endif %}
+        </dd>
+
+        <dt class="text-slate-600">Redundant bytes (cleanup opportunity)</dt>
+        <dd class="font-medium">{{ fmt_bytes(report.duplicate_bytes) }}</dd>
+
+        {# Distinct from hash duplicates above — counts CV issues with
+           >1 resolved file claiming them (multiple rips of the same
+           comic). Linked when non-zero so the same inspector is one
+           click from here. #}
+        <dt class="text-slate-600">Issues with multiple files</dt>
+        <dd class="font-medium{% if issue_dup_groups %} text-amber-700{% endif %}">
+          {% if issue_dup_groups %}
+            <a href="/admin/duplicates" class="hover:underline">{{ issue_dup_groups }}</a>
+          {% else %}
+            {{ issue_dup_groups }}
+          {% endif %}
+        </dd>
+
+        <dt class="text-slate-600">Files excluded from matching</dt>
+        <dd class="font-medium">{{ report.excluded_count }}</dd>
+      </dl>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+      <h2 class="text-lg font-medium">ComicInfo coverage</h2>
+      <p class="text-xs text-slate-500">
+        Files with ComicVine IDs match in one shot. Partial ComicInfo (series + number, no CV ID) goes through filename matching with a metadata boost. No ComicInfo means filename-only — accuracy depends on filename quality.
+      </p>
+      <table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-slate-500">
+          <tr><th class="py-1">Coverage</th><th class="py-1 text-right">Files</th><th class="py-1 text-right">Share</th></tr>
+        </thead>
+        <tbody>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Full (with CV ID)</td>
+            <td class="py-1 text-right">{{ report.comicinfo.full_with_cvid }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.comicinfo.full_with_cvid / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Partial (no CV ID)</td>
+            <td class="py-1 text-right">{{ report.comicinfo.partial }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.comicinfo.partial / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">None</td>
+            <td class="py-1 text-right">{{ report.comicinfo.none }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.comicinfo.none / report.total_files) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+      <h2 class="text-lg font-medium">Match status</h2>
+      <table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-slate-500">
+          <tr><th class="py-1">Status</th><th class="py-1 text-right">Files</th><th class="py-1 text-right">Share</th></tr>
+        </thead>
+        <tbody>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Auto</td>
+            <td class="py-1 text-right">{{ report.matches.auto }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.matches.auto / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Confirmed (by reviewer)</td>
+            <td class="py-1 text-right">{{ report.matches.confirmed }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.matches.confirmed / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Pending (needs review)</td>
+            <td class="py-1 text-right font-medium">{{ report.matches.pending }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.matches.pending / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Unmatched</td>
+            <td class="py-1 text-right">{{ report.matches.unmatched }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.matches.unmatched / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Rejected</td>
+            <td class="py-1 text-right">{{ report.matches.rejected }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.matches.rejected / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Local entry (catalogued by hand)</td>
+            <td class="py-1 text-right">{{ report.matches.local }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.matches.local / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="py-1">Supplement (non-issue content)</td>
+            <td class="py-1 text-right">{{ report.matches.supplement }}</td>
+            <td class="py-1 text-right text-slate-500">{{ pct(report.matches.supplement / report.total_files) }}</td>
+          </tr>
+          <tr class="border-t border-slate-100 text-slate-500">
+            <td class="py-1">Not yet attempted</td>
+            <td class="py-1 text-right">{{ report.matches.no_match_row }}</td>
+            <td class="py-1 text-right">{{ pct(report.matches.no_match_row / report.total_files) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+      <h2 class="text-lg font-medium">Match rate</h2>
+      <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <dt class="text-slate-600">Projected auto-match rate (pre-matcher)</dt>
+        <dd class="font-medium">
+          {{ pct(report.projected_auto_rate) }}
+          <span class="text-xs text-slate-500">
+            ({{ pct(report.projected_auto_rate_low) }} – {{ pct(report.projected_auto_rate_high) }})
+          </span>
+        </dd>
+
+        <dt class="text-slate-600">Observed auto-match rate (of files processed so far)</dt>
+        <dd class="font-medium">{{ pct(report.observed_auto_rate) }}</dd>
+      </dl>
+      <p class="text-xs text-slate-500">
+        Projected is computed from ComicInfo coverage alone — useful for answering "will Longboxes work well for my library?" before the matcher has run. Observed is <code>(auto + confirmed)</code> over the files the matcher has actually processed. Files still queued (not yet attempted), along with hand-catalogued local entries and supplements, are excluded from that denominator — so a long matcher run doesn't read as a near-zero rate while the queue is still draining.
+      </p>
+    </section>
+
+  {% endif %}
+</main>
+{% endblock %}

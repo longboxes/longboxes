@@ -1,0 +1,223 @@
+{% extends "_entity_page.html" %}
+{% from "_sidebar.html" import sidebar_section %}
+{% from "_progress_bar.html" import progress_bar %}
+
+{# Phase 11C — the /local/issue/{id} page. A user-authored issue under a
+   local volume: core identification metadata, the files on disk, and
+   prev/next navigation within the volume. ``detail`` is a
+   ``LocalIssueDetail`` (see app/services/local.py). No CV credits /
+   characters / arcs — local issues are metadata islands by design.
+
+   Laid out to track the CV issue page: a banner hero with the cover on
+   the left and the issue's metadata in the text column, then a card
+   below it. A local issue has no CV banner art, so the hero is a plain
+   dark panel; the breadcrumb moves into that card. Prev/next neighbour
+   navigation matches the CV issue page too — cover-thumbnail links in
+   the hero below ``lg``, the sidebar issue rail at ``lg`` and up. #}
+
+{# A neighbour issue's cover thumbnail. ``dark`` picks the on-banner
+   styling (white border, dark fallback) for the mobile hero strip; the
+   light styling is for the desktop sidebar rail. #}
+{% macro neighbor_cover(ref, dark=false) %}
+  <span class="block w-full rounded overflow-hidden {{ 'border border-white/30 bg-slate-800' if dark else 'border border-slate-200 bg-slate-100' }}"
+        style="aspect-ratio: 2 / 3;">
+    {% if ref.cover_file_id %}
+      <img src="/review/file/{{ ref.cover_file_id }}/cover" alt="" loading="lazy"
+           class="w-full h-full object-cover transition-opacity group-hover:opacity-80">
+    {% else %}
+      <span class="flex h-full items-center justify-center text-[10px] {{ 'text-white/50' if dark else 'text-slate-400' }}">no cover</span>
+    {% endif %}
+  </span>
+{% endmacro %}
+
+{% block title %}
+  {%- if detail.issue_number %}#{{ detail.issue_number }} &middot; {% endif -%}
+  {{ detail.volume_name }} &middot; Longboxes
+{% endblock %}
+
+{% block content %}
+  {# The first file on disk for this issue, if any — the hero cover
+     links into the reader when this is set. #}
+  {% set read_file = detail.files[0] if detail.files else none %}
+
+  {# Hero — the same banner hero the CV issue page uses, but with a
+     plain dark panel in place of a CV screen image: a local issue has
+     no banner art. The file's own first page is the cover (left, full
+     hero height); the issue number, name, and parent volume sit in the
+     text column, bottom-aligned. #}
+  <section class="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-900 h-72 md:h-96">
+    <div class="relative h-full flex items-stretch gap-5 p-5 text-white">
+      <div class="relative h-full shrink-0 rounded-md overflow-hidden border border-white/20 bg-slate-800" style="aspect-ratio: 2 / 3;">
+        {% if detail.cover_file_id %}
+          <img src="/review/file/{{ detail.cover_file_id }}/cover" alt="cover"
+               class="w-full h-full object-cover">
+        {% else %}
+          <div class="w-full h-full flex items-center justify-center text-xs opacity-60">no cover</div>
+        {% endif %}
+        {% if read_file %}
+          {# Cover → reader. Stretched overlay link, matching the CV
+             issue page. #}
+          <a href="/read/{{ read_file.file_id }}"
+             class="absolute inset-0 z-10"
+             aria-label="Read this issue" title="Read"></a>
+        {% endif %}
+        {# Reading-progress bar along the cover's bottom edge. #}
+        {{ progress_bar(reading_progress) }}
+      </div>
+      <div class="flex-1 min-w-0 flex flex-col justify-end gap-1">
+        <span class="self-start rounded px-1.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-600">Local issue</span>
+        {# ``line-clamp-2`` keeps a long issue name from ballooning the
+           bottom-aligned content and clipping off the top of the hero. #}
+        <h1 class="text-2xl md:text-3xl font-semibold tracking-tight drop-shadow line-clamp-2">
+          {% if detail.issue_number %}<span class="opacity-70 font-mono">#{{ detail.issue_number }}</span>{% endif %}
+          {% if detail.name %}{{ detail.name }}{% endif %}
+        </h1>
+        <div class="text-sm opacity-90">
+          <a class="hover:underline" href="/local/volume/{{ detail.volume_id }}">{{ detail.volume_name }}</a>
+          {% if detail.volume_year %}({{ detail.volume_year }}){% endif %}
+          {% if detail.publisher_name %}<span class="opacity-60"> &middot; </span>{{ detail.publisher_name }}{% endif %}
+        </div>
+        {% if detail.cover_date %}
+          <div class="text-sm opacity-75">Cover date: {{ detail.cover_date }}</div>
+        {% endif %}
+        {# Mobile / tablet prev-next neighbours — cover-thumbnail links,
+           superseded by the sidebar issue rail at ``lg`` and up (where
+           both would otherwise show the same nav twice). #}
+        {% if detail.prev_issue or detail.next_issue %}
+          <div class="flex items-center gap-3 pt-2 lg:hidden">
+            {% if detail.prev_issue %}
+              {% set pn = detail.prev_issue %}
+              <a href="/local/issue/{{ pn.id }}"
+                 title="Previous: #{{ pn.issue_number or '?' }} {{ pn.name or '' }}"
+                 class="group flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
+                <span class="text-sm">&larr;</span>
+                <span class="block w-12">{{ neighbor_cover(pn, dark=true) }}</span>
+              </a>
+            {% endif %}
+            {% if detail.next_issue %}
+              {% set nn = detail.next_issue %}
+              <a href="/local/issue/{{ nn.id }}"
+                 title="Next: #{{ nn.issue_number or '?' }} {{ nn.name or '' }}"
+                 class="group flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
+                <span class="block w-12">{{ neighbor_cover(nn, dark=true) }}</span>
+                <span class="text-sm">&rarr;</span>
+              </a>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {# Info card — stands in for the CV issue page's "About" card, which a
+     local issue can't have (no ComicVine wiki content). It carries the
+     breadcrumb trail and a short note, so the page keeps the same
+     hero → card rhythm as a CV issue. #}
+  <section id="info" class="bg-white border border-slate-200 rounded-lg p-4 space-y-2">
+    <nav class="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+      <a href="/library" class="hover:underline">Library</a>
+      <span class="text-slate-300">/</span>
+      <a href="/local/volume/{{ detail.volume_id }}" class="hover:underline">{{ detail.volume_name }}</a>
+      <span class="text-slate-300">/</span>
+      <span class="text-slate-700">#{{ detail.issue_number or "—" }}</span>
+    </nav>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <p class="text-sm text-slate-600 max-w-xl">
+        A local issue — catalogued by hand because this series has no
+        ComicVine record. It carries core identification metadata only.
+      </p>
+      {# Editing local metadata is admin-only, matching the create-local
+         routes — a viewer never sees the button. #}
+      {% if user is defined and user is not none and user.role == "admin" %}
+        <a href="/local/issue/{{ detail.id }}/edit"
+           class="shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-100">
+          Edit
+        </a>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if detail.files %}
+    <section id="files" class="bg-white border border-slate-200 rounded-lg p-4">
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <h2 class="text-sm font-medium text-slate-700">Files on disk</h2>
+        {% if reading_progress %}
+          {# Clear this user's saved reading position for the issue. #}
+          <form method="post" action="/read/{{ read_file.file_id }}/reset-progress"
+                onsubmit="return confirm('Reset reading progress for this issue?')">
+            <button type="submit"
+                    class="text-xs font-medium text-slate-500 hover:text-slate-900 hover:underline">
+              Reset reading progress
+            </button>
+          </form>
+        {% endif %}
+      </div>
+      <ul class="space-y-1.5">
+        {% for f in detail.files %}
+          <li class="flex items-center justify-between gap-3">
+            <span class="text-xs font-mono text-slate-700 break-all">{{ f.path }}</span>
+            <a href="/read/{{ f.file_id }}"
+               class="shrink-0 inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+              Read
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block sidebar_nav_links %}
+  <a href="#info" class="block text-slate-600 hover:text-slate-900">Info</a>
+  {% if detail.files %}<a href="#files" class="block text-slate-600 hover:text-slate-900">Files</a>{% endif %}
+{% endblock %}
+
+{% block sidebar_extras %}
+  {% call sidebar_section("Volume") %}
+    <a href="/local/volume/{{ detail.volume_id }}"
+       class="block text-sm text-slate-700 hover:text-slate-900 hover:underline">
+      {{ detail.volume_name }}{% if detail.volume_year %}
+        <span class="text-slate-400">({{ detail.volume_year }})</span>{% endif %}
+    </a>
+  {% endcall %}
+
+  {# Desktop issue rail — prev/next issue-number neighbours within the
+     local volume, as thumbnails above/below a "this issue" node. The
+     entity-page sidebar is ``lg`` and up only, so this is the desktop
+     navigation; the hero strip above carries it below ``lg``. A
+     stripped-down cousin of ``_issue_rail.html``: no cross-volume arc
+     branches (a local issue has no arcs) and no spine fades. #}
+  {% set pn = detail.prev_issue %}
+  {% set nn = detail.next_issue %}
+  {% if pn or nn %}
+    <div>
+      <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">Issue rail</div>
+      <div class="flex flex-col items-center w-24">
+        {% if pn %}
+          <a href="/local/issue/{{ pn.id }}"
+             title="↑ #{{ pn.issue_number or '?' }}{% if pn.name %}: {{ pn.name }}{% endif %}"
+             class="block w-16 group">
+            {{ neighbor_cover(pn) }}
+            <span class="block text-[10px] text-center mt-1 font-mono text-slate-500">#{{ pn.issue_number or "?" }}</span>
+          </a>
+        {% else %}
+          {# Spacer keeps the node centred when this is the first issue. #}
+          <div class="w-16" style="height: 109px;"></div>
+        {% endif %}
+        <div class="w-0.5 bg-slate-300" style="height: 20px;"></div>
+        <div class="w-3.5 h-3.5 rounded-full bg-slate-700 ring-2 ring-white shadow-sm" title="This issue"></div>
+        <div class="w-0.5 bg-slate-300" style="height: 40px;"></div>
+        {% if nn %}
+          <a href="/local/issue/{{ nn.id }}"
+             title="↓ #{{ nn.issue_number or '?' }}{% if nn.name %}: {{ nn.name }}{% endif %}"
+             class="block w-16 group">
+            {{ neighbor_cover(nn) }}
+            <span class="block text-[10px] text-center mt-1 font-mono text-slate-500">#{{ nn.issue_number or "?" }}</span>
+          </a>
+        {% else %}
+          <div class="w-16" style="height: 109px;"></div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

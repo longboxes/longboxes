@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% from "_decorations.html" import corner_flag %}
+{% block title %}Home &middot; Longboxes{% endblock %}
+
+{# One comic on the "Continue reading" / "Recently read" grids.
+   Two click targets, so each label gets the user to the right place:
+   * Cover thumbnail → reader (``read_url``), resuming at the saved page.
+   * Title / subtitle text → issue page (``issue_url``), where the
+     description / reset-progress / fix-match controls live.
+   The progress meta line (Page N of M, Finished) sits OUTSIDE both
+   anchors so the user can read it without accidentally clicking
+   either link. ``c`` is a ReadingProgressCard. #}
+{% macro progress_card(c) %}
+  <li class="min-w-0">
+    <a href="{{ c.read_url }}" class="block group" title="Open in reader">
+      <div class="relative w-full bg-slate-100 rounded-md overflow-hidden border border-slate-200" style="aspect-ratio: 2 / 3;">
+        {% if c.cover_url %}
+          <img src="{{ c.cover_url }}" alt="cover" loading="lazy" class="absolute inset-0 w-full h-full object-cover group-hover:opacity-90">
+        {% else %}
+          <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">no cover</div>
+        {% endif %}
+        {% if c.finished %}
+          <span class="absolute top-1 right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[11px] font-bold shadow" title="Finished">&check;</span>
+        {% endif %}
+        {# Progress bar pinned to the bottom edge of the cover. #}
+        <div class="absolute inset-x-0 bottom-0 h-1.5 bg-slate-900/30">
+          <div class="h-full bg-emerald-500" style="width: {{ c.percent }}%"></div>
+        </div>
+      </div>
+    </a>
+    <div class="mt-1 text-xs">
+      <a href="{{ c.issue_url }}" class="block hover:underline" title="Open issue page">
+        <div class="font-medium text-slate-900 line-clamp-2">{{ c.title }}</div>
+        {% if c.subtitle %}
+          <div class="text-slate-500 line-clamp-1">{{ c.subtitle }}</div>
+        {% endif %}
+      </a>
+      <div class="text-slate-400">
+        {% if c.finished %}Finished{% else %}Page {{ c.page + 1 }} of {{ c.page_count }}{% endif %}
+      </div>
+    </div>
+  </li>
+{% endmacro %}
+
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-8">
+
+  <section>
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="text-lg font-medium">Recently added</h2>
+      <a href="/library" class="text-sm text-slate-500 hover:underline">Browse library →</a>
+    </div>
+    {% if recently_added %}
+      <ul class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {% for r in recently_added %}
+          {# min-w-0 + inline aspect-ratio + absolute-positioned img keeps
+             the high-res cover constrained to the grid column. See library.html. #}
+          <li class="min-w-0">
+            <a href="{{ r.detail_url }}" class="block group">
+              <div class="relative w-full bg-slate-100 rounded-md overflow-hidden border border-slate-200" style="aspect-ratio: 2 / 3;">
+                {% if r.cover_url %}
+                  <img src="{{ r.cover_url }}" alt="cover" loading="lazy" class="absolute inset-0 w-full h-full object-cover group-hover:opacity-90">
+                {% else %}
+                  <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">no cover</div>
+                {% endif %}
+                {# Corner flag — green for a ComicVine volume, gray for a
+                   hand-catalogued local volume (Phase 11). #}
+                {% if r.kind == "local" %}
+                  {{ corner_flag("border-t-slate-400", "Local volume") }}
+                {% else %}
+                  {{ corner_flag("border-t-emerald-500", "ComicVine volume") }}
+                {% endif %}
+              </div>
+              <div class="mt-1 text-xs">
+                <div class="font-medium text-slate-900 line-clamp-2">{{ r.name }}</div>
+                <div class="text-slate-500">
+                  {{ r.issue_count }} issue{{ "s" if r.issue_count != 1 else "" }}
+                  {% if r.year %} &middot; {{ r.year }}{% endif %}
+                </div>
+              </div>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-600">
+        Nothing matched yet. Drop some CBZ/CBR files into the library mount, then run a scan from <a class="underline" href="/admin">/admin</a>.
+      </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2 class="text-lg font-medium mb-3">Continue reading</h2>
+    {% if continue_reading %}
+      <ul class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {% for c in continue_reading %}{{ progress_card(c) }}{% endfor %}
+      </ul>
+    {% else %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-600">
+        Nothing in progress. Open a comic and your place is saved here automatically.
+      </div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2 class="text-lg font-medium mb-3">Recently read</h2>
+    {% if recently_read %}
+      <ul class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {% for c in recently_read %}{{ progress_card(c) }}{% endfor %}
+      </ul>
+    {% else %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-600">
+        Comics you finish will show up here.
+      </div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

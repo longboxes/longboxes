@@ -1,0 +1,9 @@
+{# Fragment-only template for the /volume/{cv_id}/rail endpoint.
+   Returns just the rail SVG (no headers, no surrounding markup) so
+   Alpine on the volume page can swap it into the rail container's
+   innerHTML on pagination changes.
+
+   ``show_nodes`` is forwarded from the route so the Arcs view's
+   lines-only rail re-renders correctly during pagination. #}
+{% from "_arc_rail.html" import arc_rail %}
+{{ arc_rail(rail, show_nodes=show_nodes) }}

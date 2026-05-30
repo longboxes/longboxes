@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% from "_search_hit_row.html" import search_hit_row %}
+
+{# Global search results. Drives two routes from one template:
+
+   ``source = "library"`` (the /search route) — multi-section view
+   over the local cache with the owned/other volume split and a
+   "Search ComicVine" CTA next to the search form.
+
+   ``source = "comicvine"`` (the /search/comicvine route) — same
+   shape but populated from CV's live ``/search/`` endpoint. The
+   owned/other volume split collapses into one flat "Volumes"
+   section (CV doesn't know what you own); every result links to a
+   local detail URL where the cache layer lazy-hydrates on first
+   view. A back-link returns to library results.
+
+   Empty ``q`` or one too short to be searched renders an instructional
+   shell rather than 404'ing — typing through the header eventually
+   replaces it with real hits. #}
+{# Default for routes that forget to pass it. Library is the
+   conservative fall-through. #}
+{% set source = source | default("library") %}
+{% set is_cv = source == "comicvine" %}
+
+{% block title %}
+  {% if q %}
+    {% if is_cv %}ComicVine search{% else %}Search{% endif %}: {{ q }}
+  {% else %}
+    {% if is_cv %}Search ComicVine{% else %}Search{% endif %}
+  {% endif %}
+  &middot; Longboxes
+{% endblock %}
+
+{% block body %}
+  {% include "_header.html" %}
+
+  {# Section-key → display title. Used by the section() macro for the
+     header text AND by the kind-filter view to label the single
+     expanded section. #}
+  {% set section_titles = {
+    "volumes":       "Volumes",
+    "local_volumes": "Local volumes",
+    "issues":        "Issues in your library",
+    "characters":    "Characters",
+    "creators":      "Creators",
+    "teams":         "Teams",
+    "arcs":          "Story arcs",
+  } %}
+
+  <main class="max-w-5xl mx-auto px-6 py-6 space-y-6">
+    <header class="space-y-2">
+      {% if is_cv and kind %}
+        {# CV drill-down: back to CV multi-section, plus a secondary
+           jump to library results for the same query. #}
+        <nav class="text-xs flex flex-wrap items-center gap-x-4 gap-y-1">
+          <a href="/search/comicvine?q={{ q | urlencode }}"
+             class="text-slate-500 hover:text-slate-900">&larr; All ComicVine results</a>
+          <a href="/search?q={{ q | urlencode }}"
+             class="text-slate-400 hover:text-slate-700">Library results</a>
+        </nav>
+      {% elif is_cv %}
+        {# CV multi-section: back to library results. #}
+        <nav class="text-xs">
+          <a href="/search?q={{ q | urlencode }}"
+             class="text-slate-500 hover:text-slate-900">&larr; Library results</a>
+        </nav>
+      {% elif kind %}
+        {# Kind-filter mode: small "back to all results" link above the
+           heading so the user can climb back to the multi-section view. #}
+        <nav class="text-xs">
+          <a href="/search?q={{ q | urlencode }}"
+             class="text-slate-500 hover:text-slate-900">&larr; All results</a>
+        </nav>
+      {% endif %}
+      <h1 class="text-2xl font-semibold tracking-tight">
+        {% if q and q|length >= min_query_length %}
+          {% if is_cv and kind %}
+            {{ section_titles[kind] }} on ComicVine matching &ldquo;{{ q }}&rdquo;
+          {% elif is_cv %}
+            ComicVine results for &ldquo;{{ q }}&rdquo;
+          {% elif kind %}
+            {{ section_titles[kind] }} matching &ldquo;{{ q }}&rdquo;
+          {% else %}
+            Results for &ldquo;{{ q }}&rdquo;
+          {% endif %}
+        {% else %}
+          {% if is_cv %}Search ComicVine{% else %}Search{% endif %}
+        {% endif %}
+      </h1>
+      {# Inline form so a user landing here without a query (or refining
+         a search) can type without going back to the header. Same
+         action as the surrounding page so a typed query stays in the
+         current source (library / CV). #}
+      {% set form_action = "/search/comicvine" if is_cv else "/search" %}
+      <form action="{{ form_action }}" method="get" class="flex flex-wrap gap-2 max-w-2xl">
+        <input type="search" name="q" value="{{ q or '' }}"
+               placeholder="{% if is_cv %}Search ComicVine for volumes, issues, characters…{% else %}Search volumes, issues, characters, creators…{% endif %}"
+               autofocus
+               class="flex-1 min-w-[14rem] rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+        <button type="submit"
+                class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-slate-100">
+          Search
+        </button>
+        {# Library → CV jump. Only shown when there's a query to carry
+           over (a button to "search nothing on CV" is just noise) and
+           only on the library surface; CV mode already has the back
+           link above the heading. #}
+        {% if not is_cv and q and q|length >= min_query_length %}
+          <a href="/search/comicvine?q={{ q | urlencode }}"
+             class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+             title="Search ComicVine's catalogue for this query">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+            </svg>
+            Search ComicVine
+          </a>
+        {% endif %}
+      </form>
+    </header>
+
+    {% if not q %}
+      <p class="text-sm text-slate-500">
+        {% if is_cv %}
+          Search ComicVine&rsquo;s catalogue directly &mdash; results
+          link straight into Longboxes and pull through on first view.
+        {% else %}
+          Search across your library &mdash; volumes, issues, characters,
+          creators, teams, and story arcs. The
+          <a href="/search/comicvine"
+             class="text-slate-700 hover:underline">Search ComicVine</a>
+          button hits CV&rsquo;s catalogue directly for things you
+          don&rsquo;t own yet.
+        {% endif %}
+      </p>
+    {% elif q|length < min_query_length %}
+      <p class="text-sm text-slate-500">
+        Type at least {{ min_query_length }} characters to search.
+      </p>
+    {% elif results.is_empty %}
+      <p class="text-sm text-slate-500">
+        {% if is_cv %}
+          ComicVine returned no results for that query. Try a shorter
+          search or check the spelling.
+        {% else %}
+          No results in your library. Try a shorter query, or
+          <a href="/search/comicvine?q={{ q | urlencode }}"
+             class="text-slate-700 hover:underline">search ComicVine</a>
+          to find it in the catalogue.
+        {% endif %}
+      </p>
+    {% else %}
+      {# ---- helpers --------------------------------------------------- #}
+      {% macro hit_list(hits) %}
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {% for h in hits %}{{ search_hit_row(h) }}{% endfor %}
+        </ul>
+      {% endmacro %}
+
+      {# One results section.
+
+         ``key`` is the SearchResults attribute name ("volumes",
+         "characters", ...); the macro reads
+         ``results.more_available`` to decide whether to render a
+         "View all →" link. Library mode points it at
+         ``/search?q=&kind=<key>``; CV mode at
+         ``/search/comicvine?q=&kind=<key>`` (a fresh CV call narrowed
+         to that resource_type, capped at CV_KIND_FILTER_LIMIT). The
+         link is suppressed when we're already in a kind-filtered
+         view — the section is the full expanded result there. #}
+      {% set view_all_path = "/search/comicvine" if is_cv else "/search" %}
+      {% macro section(key, title, hits) %}
+        {% if hits %}
+          <section class="space-y-2">
+            <div class="flex items-baseline justify-between gap-3">
+              <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">{{ title }}</h2>
+              {% if not kind and key in results.more_available %}
+                <a href="{{ view_all_path }}?q={{ q | urlencode }}&amp;kind={{ key }}"
+                   class="text-xs font-medium text-slate-500 hover:text-slate-900">
+                  View all {{ title | lower }} &rarr;
+                </a>
+              {% endif %}
+            </div>
+            {{ hit_list(hits) }}
+          </section>
+        {% endif %}
+      {% endmacro %}
+
+      {# Publisher + format filter UI. Rendered above the volume cards
+         on the kind=volumes drill-down (library OR CV). Mirrors the
+         matcher's review_volume_search filter pattern — text input
+         for publisher (case-insensitive substring), select for the
+         classified format, live visible-count, and an empty-state
+         when both filters exclude every card. The cards' ``x-show``
+         expression already handles the visibility; this macro is
+         pure UI feeding the same Alpine state. #}
+      {% macro volumes_filter_bar(total) %}
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="flex items-center gap-2">
+            <span class="text-xs text-slate-500">Filter by publisher</span>
+            <input type="text" x-model="pubFilter" placeholder="e.g. Marvel"
+                   class="w-44 rounded-md border border-slate-300 px-2.5 py-1 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+          </label>
+          <label class="flex items-center gap-2">
+            <span class="text-xs text-slate-500">Format</span>
+            <select x-model="fmtFilter"
+                    class="rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+              <option value="">All</option>
+              <option value="ongoing">Series</option>
+              <option value="limited">Limited series</option>
+              <option value="one_shot">One-shot</option>
+              <option value="collection">Collection</option>
+            </select>
+          </label>
+          <span class="text-xs text-slate-500">
+            <span x-text="volumesVisibleCount">{{ total }}</span>
+            of {{ total }} volume{{ "s" if total != 1 else "" }} shown
+          </span>
+        </div>
+      {% endmacro %}
+      {% macro volumes_filter_empty() %}
+        <div x-show="volumesVisibleCount === 0 && (pubFilter.trim() || fmtFilter)"
+             x-cloak
+             class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+          No volumes match the current filters.
+        </div>
+      {% endmacro %}
+
+      {# ---- sections ------------------------------------------------- #}
+      {# All sections live inside one ``setupAutoRefresh`` block: the
+         helper scans every ``data-pending-id`` in the subtree, polls
+         /search/hydration with their composite ``kind:cv_id`` keys,
+         and swaps each row's HTML when the underlying stub has been
+         hydrated by the interactive worker.
+
+         ``space-y-6`` puts a healthy gap between consecutive section
+         headers — the parent ``<main>`` can't reach inside this
+         x-data wrapper to space the sections itself. #}
+      {# Alpine state for the whole results subtree:
+         * setupAutoRefresh — polls /search/hydration to swap stub
+           rows once the worker hydrates them.
+         * pubFilter / fmtFilter — feed the volumes kind-filter UI
+           below. Seeded to '' so volume rows' x-show expression is
+           a no-op on every other surface (multi-section + non-volume
+           kind-filter). ``volumesVisibleCount`` re-queries the DOM
+           by ``.search-volume-hit`` class — set on every volume row
+           by ``_search_hit_row.html``. #}
+      <div x-data="{
+             ...setupAutoRefresh({ endpoint: '/search/hydration' }),
+             pubFilter: '',
+             fmtFilter: '',
+             get volumesVisibleCount() {
+               const pf = this.pubFilter.trim().toLowerCase();
+               const ff = this.fmtFilter;
+               return [...document.querySelectorAll('.search-volume-hit')]
+                 .filter(el =>
+                   (!pf || (el.dataset.publisher || '').includes(pf)) &&
+                   (!ff || el.dataset.format === ff)
+                 ).length;
+             },
+           }"
+           x-init="scanPending()"
+           class="space-y-6">
+        {% if is_cv %}
+          {# CV mode: flat sections — CV doesn't know ownership so the
+             owned/other split doesn't apply. Local volumes are
+             omitted (not a CV concept). The "Issues" title drops the
+             "in your library" qualifier since these are catalogue
+             results, not files on disk. #}
+          {# Title overrides for CV mode (drop library-only phrasing). #}
+          {% set cv_titles = {
+            "volumes":    "Volumes",
+            "issues":     "Issues",
+            "characters": "Characters",
+            "creators":   "Creators",
+            "teams":      "Teams",
+            "arcs":       "Story arcs",
+          } %}
+          {% if kind == "volumes" %}
+            {# CV volumes drill-down: filter bar + cards + filtered
+               empty state. Same shape as the library volumes
+               drill-down below — both feed the same Alpine state. #}
+            {{ volumes_filter_bar(results.volumes | length) }}
+            {{ section("volumes", "Volumes", results.volumes) }}
+            {{ volumes_filter_empty() }}
+          {% elif kind %}
+            {# CV non-volume drill-down: render just the one expanded section. #}
+            {{ section(kind, cv_titles[kind], results | attr(kind)) }}
+          {% else %}
+            {{ section("volumes", "Volumes", results.volumes) }}
+            {{ section("issues", "Issues", results.issues) }}
+            {{ section("characters", "Characters", results.characters) }}
+            {{ section("creators", "Creators", results.creators) }}
+            {{ section("teams", "Teams", results.teams) }}
+            {{ section("arcs", "Story arcs", results.arcs) }}
+          {% endif %}
+        {% elif kind == "volumes" %}
+          {# Library volumes drill-down: filter bar + flat Volumes
+             section (owned/other collapsed; the user came here to
+             see the full ranked list, not the two buckets) + the
+             "no match" state. #}
+          {{ volumes_filter_bar(results.volumes | length) }}
+          {{ section("volumes", section_titles["volumes"], results.volumes) }}
+          {{ volumes_filter_empty() }}
+        {% elif kind %}
+          {{ section(kind, section_titles[kind], results | attr(kind)) }}
+        {% else %}
+          {# Multi-section view. Volumes split into the
+             owned-first / other pair; everything else gets one
+             section each. #}
+          {% set owned_volumes = results.volumes | selectattr('owned') | list %}
+          {% set other_volumes = results.volumes | rejectattr('owned') | list %}
+          {{ section("volumes", "Volumes in your library", owned_volumes) }}
+          {{ section("local_volumes", "Local volumes", results.local_volumes) }}
+          {{ section("issues", "Issues in your library", results.issues) }}
+          {{ section("volumes", "Other volumes", other_volumes) }}
+          {{ section("characters", "Characters", results.characters) }}
+          {{ section("creators", "Creators", results.creators) }}
+          {{ section("teams", "Teams", results.teams) }}
+          {{ section("arcs", "Story arcs", results.arcs) }}
+        {% endif %}
+      </div>
+    {% endif %}
+  </main>
+{% endblock %}

@@ -1,0 +1,83 @@
+---
+title: Longboxes
+description: Self-hosted comic library that reads your collection by story, not by file.
+template: splash
+hero:
+  tagline: A self-hosted comic library that reads your collection by story — not by file.
+  image:
+    file: ../../assets/longboxes-icon.svg
+  actions:
+    - text: Quick start
+      link: /quick-start/
+      icon: right-arrow
+      variant: primary
+    - text: Read on GitHub
+      link: https://github.com/longboxes/longboxes
+      icon: external
+      variant: secondary
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+## What it is
+
+Longboxes scans the comic archives on your disk, matches each one to its
+ComicVine entry, and then *builds a library around the story*. Issues
+join their volume. Volumes join their story arc. Characters and creators
+get their own pages with everything you own. Crossover events thread
+across series. The graph that ComicVine has always exposed, made
+walkable on your own server.
+
+It runs as a Docker compose stack. Your files stay on your disk. No
+telemetry, no account required, no cloud round-trip.
+
+<CardGrid>
+  <Card title="Read by story" icon="open-book">
+    Story arcs as first-class navigation. A crossover event walks
+    cleanly from one series into the next; characters get their own
+    pages with every issue they appear in.
+  </Card>
+  <Card title="ComicVine-aware" icon="setting">
+    Volume-first matching with ComicInfo.xml fast paths. Confident
+    matches go straight to your library; ambiguous ones land in a
+    review queue you confirm in batches.
+  </Card>
+  <Card title="Built-in reader" icon="document">
+    Browser-based page-by-page reader. Per-volume reading direction
+    (manga toggle). Per-user resume position. Continue reading shelf
+    on the home page.
+  </Card>
+  <Card title="Yours" icon="puzzle">
+    GPL-3.0, self-hosted, zero telemetry. Files stay on your disk;
+    your library data stays on your server.
+  </Card>
+</CardGrid>
+
+## Get started
+
+The fastest path:
+
+1. **[Quick start](/quick-start/)** — `docker compose up`, point at
+   your library folder, set a ComicVine API key, open the URL.
+2. **[Install](/install/)** — the same thing with the explanations
+   for when something looks unfamiliar.
+3. **[First scan](/first-scan/)** — what to expect when Longboxes
+   meets your library for the first time.
+
+If you'd rather understand the model first:
+
+- **[How matching works](/matching/)** — why Longboxes matches
+  volumes before issues, what the review queue actually contains,
+  and how to handle books ComicVine doesn't catalogue.
+- **[Reading comics](/reading/)** — the browser reader, manga mode,
+  progress tracking, incognito reading.
+
+Stuck on something? **[Troubleshooting & FAQ](/troubleshooting/)**.
+
+## Status
+
+Longboxes is pre-1.0 and self-hosted. The matcher, scanner, library
+browse, review queue, web reader, and admin tools are all built and
+running. Future work — metadata sync back to your archives, AI-assisted
+classification, cover-art matching — is captured in the project's
+design notes on GitHub.

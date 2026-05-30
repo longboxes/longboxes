@@ -1,0 +1,204 @@
+{# Issue-duplicate group card — one section per CV issue that has
+   more than one resolved file claiming it.
+
+   Shared by ``admin_duplicates.html`` (which iterates over many) and
+   ``issue_compare.html`` (which renders one for the issue page's
+   Compare button). Keeping the rendering here means a styling tweak,
+   action change, or new field shows up on both surfaces without
+   drift.
+
+   Inputs:
+
+   * ``g`` — an ``IssueGroup`` (see ``app/services/duplicates.py``)
+     with ``files`` already scored, ranked, and a winner flagged.
+   * ``supplement_types`` — list of ``(key, label)`` tuples driving
+     the per-file "Make supplement" type picker. Passed in from the
+     route so the vocabulary stays single-sourced in
+     ``app.services.local``.
+
+   ``fmt_size`` lives here because the per-file metadata row uses it;
+   ``admin_duplicates.html`` imports it from this file rather than
+   re-defining its own copy. #}
+
+{% from "_path_link.html" import path_link %}
+
+
+{# Bytes → readable string. Used in the per-file metadata line and on
+   the hash-duplicates section of admin_duplicates.html. #}
+{% macro fmt_size(n) %}
+  {%- if n is none -%}—
+  {%- elif n >= 1073741824 %}{{ "%.1f"|format(n / 1073741824) }} GB
+  {%- elif n >= 1048576 %}{{ "%.1f"|format(n / 1048576) }} MB
+  {%- elif n >= 1024 %}{{ "%.0f"|format(n / 1024) }} KB
+  {%- else %}{{ n }} B
+  {%- endif %}
+{% endmacro %}
+
+
+{# Render one IssueGroup as a self-contained card. Caller controls
+   the surrounding container; the macro emits just the <section>. #}
+{% macro issue_duplicate_card(g, supplement_types) %}
+  <section class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <header class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-start gap-3">
+      {# Reference cover for the group — the canonical CV image is
+         what the operator compares the file thumbnails against.
+         Linked to /issue/N so a click opens the issue page. The
+         service guarantees ``cover_url`` is set for any group that
+         reaches this template (groups whose CV issue hasn't been
+         hydrated yet are deferred); no conditional branching here. #}
+      <a href="/issue/{{ g.issue_cv_id }}" target="_blank" rel="noopener"
+         class="w-12 shrink-0 rounded overflow-hidden border border-slate-300 bg-slate-100 hover:border-slate-500 transition"
+         style="aspect-ratio: 2 / 3;"
+         title="Open CV issue {{ g.issue_cv_id }}">
+        <img src="{{ g.cover_url }}" alt="CV issue {{ g.issue_cv_id }} cover"
+             loading="lazy"
+             class="w-full h-full object-cover">
+      </a>
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-medium text-slate-800">
+          {% if g.volume_name %}
+            <a href="/volume/{{ g.volume_cv_id }}" class="hover:underline">{{ g.volume_name }}</a>
+          {% else %}
+            Volume {{ g.volume_cv_id or '?' }}
+          {% endif %}
+          {% if g.issue_number %}#{{ g.issue_number }}{% endif %}
+          {% if g.issue_name %}— {{ g.issue_name }}{% endif %}
+        </div>
+        <div class="text-xs text-slate-500 font-mono">
+          <a href="/issue/{{ g.issue_cv_id }}" class="hover:underline">CV issue {{ g.issue_cv_id }}</a>
+          &middot; {{ g.files|length }} files
+          {% if g.cover_date %}&middot; {{ g.cover_date.strftime('%Y-%m-%d') }}{% endif %}
+        </div>
+      </div>
+    </header>
+    <ul class="divide-y divide-slate-100">
+      {% for f in g.files %}
+        <li class="px-4 py-3 flex flex-wrap items-start gap-3
+                   {% if f.is_winner %}bg-emerald-50/40{% endif %}">
+          {# File-cover thumbnail. Linked to the reader so a click
+             lets the operator peek inside the archive — useful for
+             confirming whether a 3-page file is a cover gallery,
+             a sketch variant, or just a corrupt placeholder. The
+             matching cover endpoint serves a placeholder SVG when
+             extraction fails, so a broken archive still renders
+             without a broken-image icon. ``?preview=1`` tells the
+             reader to skip progress tracking + resume-from-saved
+             — this is sampling, not reading, and we don't want
+             admin triage to populate the user's continue-reading
+             shelf. #}
+          <a href="/read/{{ f.file_id }}?preview=1" target="_blank" rel="noopener"
+             class="w-10 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100 hover:border-slate-400 transition"
+             style="aspect-ratio: 2 / 3;"
+             title="Open in reader">
+            <img src="/review/file/{{ f.file_id }}/cover" alt=""
+                 loading="lazy"
+                 class="w-full h-full object-cover">
+          </a>
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              {% if f.is_winner %}
+                <span class="rounded-md border border-emerald-300 bg-emerald-100 text-emerald-800 text-xs font-medium px-2 py-0.5">
+                  Recommended keeper
+                </span>
+              {% else %}
+                <span class="rounded-md border border-slate-200 bg-white text-slate-500 text-xs px-2 py-0.5">
+                  Candidate to delete
+                </span>
+              {% endif %}
+              {% if f.excluded_from_matching %}
+                <span class="rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs px-2 py-0.5">
+                  excluded
+                </span>
+              {% endif %}
+            </div>
+            {% if f.path %}
+              <div class="text-sm text-slate-800 break-all mt-1">{{ path_link(f.path) }}</div>
+            {% else %}
+              <div class="text-sm font-mono text-slate-500 mt-1">(no current location)</div>
+            {% endif %}
+            <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3">
+              <span class="font-mono">{{ f.archive_format or 'unknown' }}</span>
+              <span>ComicInfo: {{ f.comicinfo_status }}</span>
+              <span>{{ f.page_count or 0 }} pp</span>
+              {# Resolution display. Interior dimensions are the
+                 scorer's preferred signal, so they get the
+                 prominent slot; cover dimensions are labelled
+                 as a fallback / context line when both are
+                 present. Older files (scanned before the
+                 interior column existed) just show the cover
+                 value. #}
+              {% if f.interior_width and f.interior_height %}
+                <span title="Interior page sample (used for ranking)">
+                  {{ f.interior_width }}x{{ f.interior_height }} interior
+                </span>
+                {% if f.cover_width and f.cover_height %}
+                  <span class="text-slate-400" title="Cover dimensions — for context">
+                    ({{ f.cover_width }}x{{ f.cover_height }} cover)
+                  </span>
+                {% endif %}
+              {% elif f.cover_width and f.cover_height %}
+                <span title="Cover dimensions — no interior sample on file yet">
+                  {{ f.cover_width }}x{{ f.cover_height }} cover
+                </span>
+              {% endif %}
+              <span>{{ fmt_size(f.size_bytes) }}</span>
+              <span>scanned {{ f.first_scanned_at.strftime('%Y-%m-%d') }}</span>
+            </div>
+          </div>
+          {# Per-file action group. On mobile the controls stack
+             full-width (flex-col + w-full children) so the
+             supplement select doesn't overflow the viewport; at
+             sm: they collapse back into the original horizontal
+             row. ``w-full sm:w-auto`` on the wrapper itself
+             makes the group claim its own line under the file
+             metadata on phones rather than fighting for room
+             beside it. #}
+          <div class="w-full sm:w-auto shrink-0 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-1.5">
+            <a href="/review/{{ f.file_id }}"
+               class="rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-100 text-center">
+              Review
+            </a>
+            {# Make-supplement quick action — when a duplicate file is
+               obviously a cover gallery or bonus content rather than
+               the actual issue (a 3-page archive in a group of
+               25-page ones, say), one click moves it off the issue
+               and onto the volume's Supplements section. The select
+               covers every entry in SUPPLEMENT_TYPES so the
+               vocabulary stays single-sourced.
+
+               The form keeps its select+button side-by-side at all
+               widths; ``flex-1 min-w-0`` on the select lets it
+               shrink with the form's full width on mobile instead
+               of pushing the button off-screen. #}
+            <form method="post" action="/admin/duplicates/file/{{ f.file_id }}/supplement"
+                  class="flex items-center gap-1 w-full sm:w-auto"
+                  onsubmit="return confirm('Re-resolve this file as a supplement on the volume? The issue-duplicate row will disappear.')">
+              <select name="supplement_type"
+                      class="flex-1 min-w-0 sm:flex-none rounded-md border border-slate-300 bg-white text-slate-700 text-xs px-2 py-1.5"
+                      aria-label="Supplement type">
+                {% for key, label in supplement_types %}
+                  <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit"
+                      class="shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-100"
+                      title="Re-resolve as a supplement on this volume — removes the issue match">
+                Make supplement
+              </button>
+            </form>
+            {% if not f.excluded_from_matching %}
+              <form method="post" action="/admin/duplicates/file/{{ f.file_id }}/exclude"
+                    class="w-full sm:w-auto"
+                    onsubmit="return confirm('Exclude this file from matching?')">
+                <button type="submit"
+                        class="w-full sm:w-auto rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-100">
+                  Exclude
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endmacro %}

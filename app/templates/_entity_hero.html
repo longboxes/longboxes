@@ -1,0 +1,173 @@
+{# Shared hero/header macro for entity pages (volume, arc, issue).
+
+   One macro, two variants. ``banner_url`` / ``dark_fill`` decide which:
+
+     * Banner hero → ``banner_url`` (a CV screen image under a dark
+       gradient) OR ``dark_fill`` (a plain dark panel, no art, for
+       entities with no banner image — e.g. local volumes). Either
+       way the title and meta float right-justified at the bottom.
+       A ``cover_url`` is shown on the left as the hero's visual
+       anchor when ``dark_fill`` is set, or when ``banner_cover``
+       opts a ``banner_url`` hero into the issue-style cover-on-
+       banner layout. Used by volume + arc, the local volume page,
+       and the character page.
+
+     * Cover + text layout → neither given: cover thumb on the left,
+       breadcrumb + title + meta on the right. Used by all three
+       entity types when CV has no banner image for them.
+
+   The issue page's banner branch is structurally distinct (cover
+   thumb floats inside the banner alongside text) and stays inline
+   in issue.html. Its no-banner branch uses this macro.
+
+   The caller block receives three arguments so the same meta
+   markup works in either variant:
+
+     ``meta_class``   — primary meta text utilities. ``opacity-90``
+                        on banners (light text on dark bg) or
+                        ``text-slate-600`` on the no-banner layout
+                        (dark text on light bg).
+     ``subtle_class`` — muted divider/separator tone. ``opacity-60``
+                        on banners, ``text-slate-400`` on no-banner.
+     ``is_banner``    — boolean, True iff the macro picked the
+                        banner branch. Pages use this to gate
+                        variant-only chrome (e.g., a meta line
+                        that's only shown when there's room in the
+                        no-banner layout).
+
+   ``deck`` is rendered automatically using the variant-aware
+   classes — pages pass ``deck=detail.deck`` and the macro picks
+   the right styling. ``deck_hide_mobile`` hides the deck below the
+   ``md`` breakpoint (the entity pages whose hero is already tight on
+   a phone opt into this).
+
+   ``cover_href`` (optional) turns the cover into a link: a stretched
+   overlay anchor sits over the cover image so the whole thing is the
+   click target. The issue page passes it to send the cover into the
+   reader. Works in both variants.
+
+   ``cover_progress`` (optional) is a ProgressBar — a thin reading-
+   progress bar is drawn along the cover's bottom edge. Works in both
+   variants. #}
+
+{% from "_cv_badge.html" import cv_badge %}
+{% from "_progress_bar.html" import progress_bar %}
+
+{% macro entity_hero(
+    title,
+    banner_url=none,
+    dark_fill=false,
+    cover_url=none,
+    cover_alt='',
+    cover_missing=false,
+    cover_w='w-40',
+    cover_href=none,
+    cover_progress=none,
+    banner_cover=false,
+    cv_site_url=none,
+    breadcrumbs=none,
+    deck=none,
+    deck_hide_mobile=false
+) %}
+  {% if banner_url or dark_fill %}
+    {# ---- Banner variant ---- #}
+    {# Two ways in: a CV ``banner_url`` screen image under a gradient,
+       or ``dark_fill`` — a plain dark panel with no art, for entities
+       that have no banner (local volumes) but should still read as the
+       same kind of page. The dark section background carries both. #}
+    <section class="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-900 h-72 md:h-96">
+      {% if banner_url %}
+        {# object-top pins the top of the banner image when cropping —
+           CV's screen images put the title/logo near the top, so this
+           keeps the meaningful art visible inside the hero. #}
+        <img src="{{ banner_url }}" alt="" class="absolute inset-0 w-full h-full object-cover object-top">
+        <div class="absolute inset-0 bg-gradient-to-l from-slate-900/95 via-slate-900/70 to-slate-900/35"></div>
+      {% endif %}
+      {% if cv_site_url %}
+        <div class="absolute top-3 right-3 z-10">
+          {{ cv_badge(cv_site_url) }}
+        </div>
+      {% endif %}
+      {# Hero content. The cover thumbnail is prepended on the left
+         when ``dark_fill`` is set (the local volume page) or when
+         ``banner_cover`` opts a real banner into the issue-style
+         cover-on-banner layout (the character page). The text column
+         always floats its content to the bottom-right. #}
+      <div class="relative h-full flex items-stretch gap-5 p-6 text-white">
+        {% if cover_url and (dark_fill or banner_cover) %}
+          <div class="relative h-full shrink-0 rounded-md overflow-hidden border border-white/20 bg-slate-800" style="aspect-ratio: 2 / 3;">
+            <img src="{{ cover_url }}" alt="{{ cover_alt }}" class="w-full h-full object-cover">
+            {% if cover_href %}
+              {# Stretched overlay link — the whole cover is clickable. #}
+              <a href="{{ cover_href }}" class="absolute inset-0 z-10"
+                 aria-label="Read" title="Read"></a>
+            {% endif %}
+            {{ progress_bar(cover_progress) }}
+          </div>
+        {% endif %}
+        <div class="flex-1 min-w-0 flex flex-col items-end justify-end text-right space-y-1">
+          <h1 class="text-3xl font-semibold tracking-tight drop-shadow">{{ title|safe }}</h1>
+          {{ caller("opacity-90", "opacity-60", true) if caller else "" }}
+          {% if deck %}
+            {# CV's ``deck`` — short one-liner under the stats line.
+               Long-form description renders in the about card below.
+               ``deck_hide_mobile`` drops it below ``md``. #}
+            <div class="text-sm italic opacity-80 max-w-xl{% if deck_hide_mobile %} hidden md:block{% endif %}">{{ deck }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  {% else %}
+    {# ---- No-banner cover-and-text variant ---- #}
+    {# ``breadcrumbs`` is a list of ``{"label", "href"}`` dicts:
+       single-item lists render as a back arrow (``← Library``),
+       multi-item lists render as path crumbs (``Library / Volume``).
+       ``cover_missing`` enables the dim-and-tag treatment used by
+       the issue page for files not yet in the user's library. #}
+    <div class="flex items-start gap-6">
+      <div class="{{ cover_w }} shrink-0">
+        <div class="group bg-slate-100 rounded-md overflow-hidden border border-slate-200 relative" style="aspect-ratio: 2 / 3;"
+             {% if cover_missing %}title="Not in your library"{% endif %}>
+          {% if cover_url %}
+            <img src="{{ cover_url }}" alt="{{ cover_alt }}"
+                 class="absolute inset-0 w-full h-full object-cover transition-opacity {% if cover_missing %}opacity-40 group-hover:opacity-100{% endif %}">
+          {% else %}
+            <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">no cover</div>
+          {% endif %}
+          {% if cover_missing %}
+            <span class="absolute top-1.5 left-1.5 inline-block rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-medium text-white/90">
+              Missing
+            </span>
+          {% endif %}
+          {% if cover_href %}
+            {# Stretched overlay link — the whole cover opens the
+               reader (issue page, Phase 6). #}
+            <a href="{{ cover_href }}" class="absolute inset-0 z-10"
+               aria-label="Read" title="Read"></a>
+          {% endif %}
+          {{ progress_bar(cover_progress) }}
+        </div>
+      </div>
+      <div class="flex-1 space-y-2">
+        {% if breadcrumbs %}
+          <nav class="text-xs text-slate-500{% if breadcrumbs|length > 1 %} flex items-center gap-3{% endif %}">
+            {% if breadcrumbs|length == 1 %}
+              <a href="{{ breadcrumbs[0].href }}" class="hover:underline">← {{ breadcrumbs[0].label }}</a>
+            {% else %}
+              {% for crumb in breadcrumbs %}
+                {% if not loop.first %}<span class="text-slate-300">/</span>{% endif %}
+                <a href="{{ crumb.href }}" class="hover:underline">{{ crumb.label }}</a>
+              {% endfor %}
+            {% endif %}
+          </nav>
+        {% endif %}
+        <h1 class="text-2xl font-semibold tracking-tight">{{ title|safe }}</h1>
+        {{ caller("text-slate-600", "text-slate-400", false) if caller else "" }}
+        {% if deck %}
+          {# CV's ``deck`` — see banner variant. #}
+          <div class="text-sm italic text-slate-500{% if deck_hide_mobile %} hidden md:block{% endif %}">{{ deck }}</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}

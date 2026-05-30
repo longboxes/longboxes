@@ -1,0 +1,113 @@
+{# "General Information" sidebar card for the character page.
+
+   A stacked definition list built from the ComicVine character payload
+   — see ``CharacterInfo`` / ``_character_info`` in
+   app/services/library.py. Every row is conditional: a field the CV
+   payload didn't carry is simply dropped, so the card never shows
+   empty "n/a" filler.
+
+   ``info`` is a ``CharacterInfo``. Publisher is intentionally NOT here
+   — it has its own ``publisher_chip`` block in the sidebar.
+
+   The "First appearance" row renders a small cover thumbnail; that
+   issue is hydrated on page load (see ``character_page``), so the
+   cover fills in on a later render.
+
+   Designed for the widened entity-page sidebar — see ``sidebar_width``
+   in ``_entity_page.html``. #}
+
+{# One label + value row; the caller renders the value. #}
+{% macro info_row(label) %}
+  <div class="px-3 py-2">
+    <dt class="text-[11px] font-medium uppercase tracking-wide text-slate-400">{{ label }}</dt>
+    <dd class="text-sm text-slate-700 mt-0.5 break-words">{{ caller() }}</dd>
+  </div>
+{% endmacro %}
+
+{# Display label for an issue ``InfoRef``: "#8 - Turbulence" / "#8" /
+   "Turbulence" / "View issue". #}
+{% macro issue_label(ref) %}
+  {%- if ref.issue_number and ref.name -%}
+    #{{ ref.issue_number }} - {{ ref.name }}
+  {%- elif ref.issue_number -%}
+    #{{ ref.issue_number }}
+  {%- elif ref.name -%}
+    {{ ref.name }}
+  {%- else -%}
+    View issue
+  {%- endif -%}
+{% endmacro %}
+
+{# A "First appearance" issue link: cover thumbnail + label. ``ref`` is
+   an issue ``InfoRef``; its ``cover_url`` fills in once the route has
+   walked the issue. Shared by the character + team info cards. #}
+{% macro first_appearance_link(ref) %}
+  <a href="/issue/{{ ref.cv_id }}" class="group flex items-center gap-2">
+    {# Cover thumbnail — empty 2:3 box until the issue hydrates. #}
+    <span class="w-12 shrink-0 relative block rounded overflow-hidden border border-slate-200 bg-slate-100"
+          style="aspect-ratio: 2 / 3;">
+      {% if ref.cover_url %}
+        <img src="{{ ref.cover_url }}" alt="" loading="lazy"
+             class="absolute inset-0 w-full h-full object-cover">
+      {% else %}
+        <span class="absolute inset-0 flex items-center justify-center text-[9px] text-slate-400">no cover</span>
+      {% endif %}
+    </span>
+    <span class="min-w-0 text-emerald-700 group-hover:text-emerald-900 group-hover:underline">
+      {{ issue_label(ref) }}
+    </span>
+  </a>
+{% endmacro %}
+
+{% macro character_info_card(info) %}
+  <dl class="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
+    {% if info.real_name %}
+      {% call info_row("Real name") %}{{ info.real_name }}{% endcall %}
+    {% endif %}
+
+    {% if info.aliases %}
+      {% call info_row("Aliases") %}
+        <ul class="space-y-0.5">
+          {% for alias in info.aliases %}<li>{{ alias }}</li>{% endfor %}
+        </ul>
+      {% endcall %}
+    {% endif %}
+
+    {% if info.gender %}
+      {% call info_row("Gender") %}{{ info.gender }}{% endcall %}
+    {% endif %}
+
+    {% if info.character_type %}
+      {% call info_row("Character type") %}{{ info.character_type }}{% endcall %}
+    {% endif %}
+
+    {% if info.first_appearance %}
+      {% call info_row("First appearance") %}
+        {{ first_appearance_link(info.first_appearance) }}
+      {% endcall %}
+    {% endif %}
+
+    {% if info.died_in %}
+      {% call info_row("Died in") %}
+        <ul class="space-y-0.5">
+          {% for issue in info.died_in %}
+            <li><a href="/issue/{{ issue.cv_id }}"
+                   class="text-emerald-700 hover:text-emerald-900 hover:underline">{{ issue_label(issue) }}</a></li>
+          {% endfor %}
+        </ul>
+      {% endcall %}
+    {% endif %}
+
+    {% if info.birthday %}
+      {% call info_row("Birthday") %}{{ info.birthday }}{% endcall %}
+    {% endif %}
+
+    {% if info.powers %}
+      {% call info_row("Powers") %}
+        <ul class="space-y-0.5">
+          {% for power in info.powers %}<li>{{ power }}</li>{% endfor %}
+        </ul>
+      {% endcall %}
+    {% endif %}
+  </dl>
+{% endmacro %}

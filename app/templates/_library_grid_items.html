@@ -1,0 +1,5 @@
+{# Inner-only render of grid cards for /library/fragment. The Alpine
+   infinite-scroll handler on library.html appends this response's
+   HTML to the end of the grid <ul>. Empty response = end of results. #}
+{% from "_library_card.html" import library_grid_card %}
+{% for r in rows %}{{ library_grid_card(r) }}{% endfor %}

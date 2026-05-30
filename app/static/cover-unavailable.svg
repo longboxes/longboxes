@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Placeholder rendered by ``/review/file/{id}/cover`` when the file's
+  cover can't be extracted (corrupt archive, unsupported format, file
+  missing on disk, etc.). 2:3 aspect to match the cover-card layout
+  the rest of the UI uses, so the placeholder occupies the exact same
+  footprint as a real cover would.
+
+  Visual: a folded-corner document icon with an amber warning
+  triangle, on a subtly dashed slate background. The dashed border
+  is intentional — it signals "this isn't a real cover" at a glance,
+  even at thumbnail size where the labels are unreadable.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"
+     preserveAspectRatio="xMidYMid meet"
+     role="img" aria-label="Cover unavailable">
+  <!-- Background fill + dashed border. The dashed border is what
+       reads as "placeholder" even at 40px wide. -->
+  <rect width="200" height="300" fill="#f1f5f9"/>
+  <rect x="4" y="4" width="192" height="292"
+        fill="none" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="8,5"/>
+
+  <!-- Document icon, centered upper area. Folded-corner page. -->
+  <g transform="translate(60, 60)" fill="#e2e8f0" stroke="#94a3b8"
+     stroke-width="3" stroke-linejoin="round">
+    <path d="M0 0 L60 0 L80 20 L80 120 L0 120 Z"/>
+    <path d="M60 0 L60 20 L80 20" fill="none"/>
+  </g>
+
+  <!-- Amber warning triangle sitting on top of the document. -->
+  <g transform="translate(85, 122)" fill="#fbbf24" stroke="#92400e"
+     stroke-width="2" stroke-linejoin="round">
+    <polygon points="15,0 30,26 0,26"/>
+    <line x1="15" y1="9" x2="15" y2="17"
+          stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="15" cy="21.5" r="1.6" fill="#7c2d12" stroke="none"/>
+  </g>
+
+  <!-- Two-line label. Unreadable at thumbnail size; carries weight
+       in the larger renderings (file detail page, etc.). -->
+  <text x="100" y="218" text-anchor="middle"
+        font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
+        font-size="15" font-weight="600" fill="#475569">Cover</text>
+  <text x="100" y="237" text-anchor="middle"
+        font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
+        font-size="15" font-weight="600" fill="#475569">unavailable</text>
+  <text x="100" y="265" text-anchor="middle"
+        font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
+        font-size="11" fill="#94a3b8">File may be unreadable</text>
+</svg>

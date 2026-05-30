@@ -1,0 +1,200 @@
+{% extends "_entity_page.html" %}
+{% from "_wiki_card.html" import wiki_about_block %}
+{% from "_progress_ring.html" import progress_ring %}
+{% from "_publisher_chip.html" import publisher_chip %}
+{% from "_character_info_card.html" import character_info_card %}
+{% from "_entity_hero.html" import entity_hero %}
+{% from "_sidebar.html" import sidebar_section, sidebar_nav_link, mobile_meta_row %}
+{% from "_volume_credits.html" import volume_credits_list %}
+{% from "_character_people.html" import character_people %}
+{% from "_person_card.html" import person_card %}
+{% from "_tabs.html" import tab_bar %}
+
+{# The /character/{cv_id} page — a ComicVine character. A cover+text
+   hero, the CV wiki "About" card, then a tabbed area: Appearances
+   (the volumes the character appears in, scraped from CV's
+   issues-cover page), Creators, Friends, Enemies and Teams. The
+   sidebar carries an owned/total completeness ring and the "General
+   Information" card. ``detail`` is a ``CharacterDetail`` (see
+   app/services/library.py). #}
+
+{% block title %}{{ detail.name }} &middot; Longboxes{% endblock %}
+
+{% block content %}
+  {% call(meta_class, subtle_class, is_banner) entity_hero(
+      title=detail.name,
+      banner_url=detail.banner_url,
+      banner_cover=true,
+      cover_url=detail.cover_url,
+      cover_alt=detail.name ~ ' portrait',
+      cv_site_url=(detail.character.raw_payload or {}).get('site_detail_url'),
+      breadcrumbs=[{"label": "Library", "href": "/library"}],
+      deck=detail.deck,
+      deck_hide_mobile=true
+  ) %}
+    {% if detail.real_name %}
+      <div class="text-sm {{ meta_class }}">{{ detail.real_name }}</div>
+    {% endif %}
+    <div class="text-sm {{ meta_class }}">
+      <span class="font-medium">{{ detail.owned_count }}</span>
+      / <span>{{ detail.total_count }}</span> appearances owned
+    </div>
+  {% endcall %}
+
+  {{ mobile_meta_row(publisher, detail.owned_count, detail.total_count) }}
+
+  {{ wiki_about_block(
+       detail.description,
+       banner_url=detail.banner_url,
+       breadcrumbs=[{"label": "Library", "href": "/library"}]
+  ) }}
+
+  {# Tabbed sections. Switching is client-side (Alpine) so it's
+     instant; the active tab is mirrored to the URL hash so it
+     survives the full-page reloads the Appearances pagination
+     triggers (those links already carry ``#appearances``). #}
+  <div id="lists"
+       x-data="setupTabs(['appearances', 'creators', 'friends', 'enemies', 'teams'])">
+    {{ tab_bar([
+         ("appearances", "Appearances"), ("creators", "Creators"),
+         ("friends", "Friends"), ("enemies", "Enemies"),
+         ("teams", "Teams")], "Character sections") }}
+
+    {# Appearances — the volumes the character appears in, scraped from
+       CV's issues-cover page. Each card links to the volume page
+       filtered to this character's issues. Deliberately NOT x-cloak'd:
+       it's the primary content and the default tab, so it stays
+       visible even if Alpine fails to load. #}
+    {% set is_admin = user is defined and user is not none and user.role == "admin" %}
+    <div x-show="tab === 'appearances'" role="tabpanel" id="appearances">
+      {% if detail.volumes_scraping %}
+        {# First visit — the volume list hasn't been scraped yet. The
+           route enqueued the background scrape; poll by reloading. #}
+        <div class="bg-white border border-slate-200 rounded-lg p-8 text-center"
+             x-data x-init="setTimeout(() => location.reload(), 15000)">
+          <div class="inline-block w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+          <p class="mt-3 text-sm font-medium text-slate-700">Building the volume list&hellip;</p>
+          <p class="mt-1 text-xs text-slate-400 max-w-md mx-auto">
+            We're gathering this character's appearances from ComicVine.
+            This can take a minute for a long-running character &mdash;
+            the page refreshes itself when it's ready.
+          </p>
+        </div>
+      {% elif detail.appearance_volumes_total == 0 and detail.total_count > 0 %}
+        {# Mismatch state: the gallery scrape ran and found zero
+           volumes, but CV's API credits the character in
+           ``total_count`` issues (driving the "In your library" ring
+           in the sidebar). The two sources can disagree when CV's
+           "issues-cover" gallery page is empty or its layout changed
+           in a way the parser doesn't recognise. Surface the gap
+           honestly and let an admin re-run the scrape. #}
+        {% if request.query_params.get('rescrape') == 'queued' %}
+          <div class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800 mb-4">
+            Re-scrape queued. The page will refresh shortly with the new
+            volume list (or another empty state if CV's gallery genuinely
+            has no volumes for this character).
+          </div>
+        {% endif %}
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-6">
+          <div class="text-sm text-amber-900">
+            <p class="font-medium">No volumes from ComicVine's gallery page.</p>
+            <p class="mt-1">
+              ComicVine credits this character in
+              <strong>{{ detail.total_count }}</strong>
+              issue{{ "s" if detail.total_count != 1 else "" }}
+              {% if detail.owned_count %}
+                (you own {{ detail.owned_count }})
+              {% endif %}, but the scrape of CV's "issues-cover"
+              gallery returned no volumes. This usually means the
+              gallery layout shifted, or the character's appearances
+              are catalogued at the issue level without dedicated
+              gallery covers.
+            </p>
+          </div>
+          {% if is_admin %}
+            <form method="post" action="/character/{{ detail.character.cv_id }}/rescrape" class="mt-4">
+              <button type="submit"
+                      class="inline-flex items-center rounded-md border border-amber-300 bg-white text-amber-900 text-xs font-medium px-3 py-1.5 hover:bg-amber-100">
+                Re-run scrape
+              </button>
+            </form>
+          {% else %}
+            <p class="mt-3 text-xs text-amber-700">
+              An admin can re-run the scrape from this page.
+            </p>
+          {% endif %}
+        </div>
+      {% else %}
+        {{ volume_credits_list(
+             detail.appearance_volumes, detail.appearance_volumes_total,
+             detail.page, detail.page_count, "page", "appearances",
+             "No volume appearances are recorded for this character.",
+             letter=detail.letter, letter_param="letter",
+             filtered_count=detail.filtered_count,
+             credit_param="character:" ~ detail.character.cv_id) }}
+      {% endif %}
+    </div>
+
+    {# Creators — the people credited with creating the character. #}
+    <div x-show="tab === 'creators'" x-cloak role="tabpanel" id="creators">
+      {% if detail.info.creators %}
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {% for creator in detail.info.creators %}
+            <li>{{ person_card("/creator/" ~ creator.cv_id, creator.name) }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="bg-white border border-slate-200 rounded-lg p-6 text-sm text-slate-500">
+          No creators are recorded for this character.
+        </div>
+      {% endif %}
+    </div>
+
+    {# Friends — the character's allies, a paginated grid. #}
+    <div x-show="tab === 'friends'" x-cloak role="tabpanel" id="friends">
+      {{ character_people(
+           detail.friends, detail.friends_total,
+           detail.friends_page, detail.friends_page_count,
+           "fpage", "friends", "friend", "/character/") }}
+    </div>
+
+    {# Enemies — the character's foes, a paginated grid. #}
+    <div x-show="tab === 'enemies'" x-cloak role="tabpanel" id="enemies">
+      {{ character_people(
+           detail.enemies, detail.enemies_total,
+           detail.enemies_page, detail.enemies_page_count,
+           "epage", "enemies", "enemy", "/character/") }}
+    </div>
+
+    {# Teams — the character's affiliations; cards link to /team/. #}
+    <div x-show="tab === 'teams'" x-cloak role="tabpanel" id="teams">
+      {{ character_people(
+           detail.teams, detail.teams_total,
+           detail.teams_page, detail.teams_page_count,
+           "tpage", "teams", "team", "/team/") }}
+    </div>
+  </div>
+{% endblock %}
+
+{% block sidebar_nav_links %}
+  {% if detail.description %}{{ sidebar_nav_link("#about", "About") }}{% endif %}
+  {{ sidebar_nav_link("#lists", "Lists") }}
+{% endblock %}
+
+{% block sidebar_extras %}
+  {% if publisher %}
+    {% call sidebar_section("Publisher") %}
+      {{ publisher_chip(publisher) }}
+    {% endcall %}
+  {% endif %}
+  {# CV-sourced facts — real name, aliases, character type, powers,
+     first appearance, etc. #}
+  {% call sidebar_section("General Information") %}
+    {{ character_info_card(detail.info) }}
+  {% endcall %}
+  {% if detail.total_count %}
+    {% call sidebar_section("In your library") %}
+      {{ progress_ring(detail.owned_count, detail.total_count) }}
+    {% endcall %}
+  {% endif %}
+{% endblock %}

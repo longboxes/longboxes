@@ -1,0 +1,37 @@
+{% extends "_centered_card.html" %}
+{% block title %}Sign in &middot; Longboxes{% endblock %}
+{% block subhead %}Sign in to your library.{% endblock %}
+{% block card %}
+<form method="post" action="/login" class="space-y-4">
+  {% if error %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">
+      {{ error }}
+    </div>
+  {% endif %}
+  {% if next %}
+    <input type="hidden" name="next" value="{{ next }}">
+  {% endif %}
+  <div>
+    <label for="username" class="block text-sm font-medium text-slate-700">Username</label>
+    <input
+      id="username" name="username" type="text" required autofocus autocomplete="username"
+      value="{{ username or '' }}"
+      class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+             focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+  </div>
+  <div>
+    <label for="password" class="block text-sm font-medium text-slate-700">Password</label>
+    <input
+      id="password" name="password" type="password" required autocomplete="current-password"
+      class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+             focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+  </div>
+  <button
+    type="submit"
+    class="w-full rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2
+           hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500
+           focus:ring-offset-2">
+    Sign in
+  </button>
+</form>
+{% endblock %}

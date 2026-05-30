@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% from "_pagination.html" import pagination_count_label, load_earlier_button, load_more_buttons %}
+{% from "_reader_link.html" import reader_link %}
+{% block title %}Pick an issue &middot; Review &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/review/{{ review.file_id }}/volume-search{% if back_query %}?q={{ back_query|urlencode }}{% endif %}"
+         class="hover:underline">&larr; Back to volume search</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Pick the issue</h1>
+    <p class="text-sm text-slate-600">
+      Choose the issue in this volume that matches the file. Picking one
+      confirms the file to it.
+    </p>
+  </div>
+
+  {# Context card — the file on the left, the volume the reviewer
+     chose in step 1 on the right. #}
+  <section class="bg-white border border-slate-200 rounded-lg p-4 flex items-center gap-4 flex-wrap">
+    <div class="flex items-start gap-3 min-w-0">
+      <div class="relative w-12 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+        <img src="/review/file/{{ review.file_id }}/cover" alt="" class="w-full h-full object-cover">
+        {{ reader_link(review.file_id) }}
+      </div>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide text-slate-400">File</div>
+        <div class="text-sm font-medium text-slate-900 break-all">{{ review.filename }}</div>
+        <div class="text-xs text-slate-500">
+          parsed
+          <span class="font-mono text-slate-700">#{{ review.parsed_issue_number or "?" }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="text-slate-300 text-lg shrink-0">&rarr;</div>
+    <div class="flex items-start gap-3 min-w-0">
+      <div class="w-12 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+        {% if volume_cover_url %}
+          <img src="{{ volume_cover_url }}" alt="" class="w-full h-full object-cover">
+        {% endif %}
+      </div>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide text-slate-400">Chosen volume</div>
+        <div class="text-sm font-medium text-slate-900">
+          <a href="/volume/{{ volume_cv_id }}" class="hover:underline">
+            {{ volume_name or "(unknown)" }}
+          </a>
+          {% if volume_year %}<span class="text-slate-400 font-normal">({{ volume_year }})</span>{% endif %}
+        </div>
+        <div class="text-xs text-slate-500">
+          {{ issues|length }} issue{{ "s" if issues|length != 1 else "" }}
+          &middot;
+          <a href="{{ cv_volume_url(volume_cv_id) }}" target="_blank" rel="noopener noreferrer"
+             class="hover:underline" title="Open on ComicVine">CV volume <span class="font-mono">{{ volume_cv_id }}</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# Issue picker. Each issue is a confirm form posting straight to
+     the file's confirm route. The issue whose number ties to the
+     file's parsed number is flagged + given the filled (primary)
+     button so it reads as the likely pick.
+
+     A volume can run to hundreds of issues, so the grid is windowed:
+     the server centers the initial window on the parsed-number match
+     (``initial_start``) and the reviewer pages up / down with the
+     shared load-earlier / load-more chrome. ``x-show`` keys each
+     form off its 0-based position against the window. #}
+  {% if issues %}
+    <div x-data="{
+           start: {{ initial_start }},
+           count: {{ page_size }},
+           pageSize: {{ page_size }},
+           total: {{ issues|length }},
+           visibleEnd() { return Math.min(this.start + this.count, this.total); },
+           loadEarlier() {
+             const ns = Math.max(0, this.start - this.pageSize);
+             this.count += this.start - ns;
+             this.start = ns;
+           },
+           loadMore() {
+             this.count = Math.min(this.total - this.start, this.count + this.pageSize);
+           },
+           showAll() { this.start = 0; this.count = this.total; }
+         }">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        {{ pagination_count_label("issue") }}
+        {% if suggested_index is not none %}
+          <span class="text-xs text-emerald-700 font-medium">
+            Centered on the parsed-number match
+          </span>
+        {% endif %}
+      </div>
+
+      {{ load_earlier_button() }}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {% for i in issues %}
+        <form method="post" action="/review/{{ review.file_id }}/confirm"
+              x-show="{{ loop.index0 }} >= start && {{ loop.index0 }} < visibleEnd()" x-cloak
+              class="flex flex-col gap-2 rounded-lg p-3 hover:shadow-sm transition
+                     {% if i.is_suggested %}bg-white border border-emerald-300 ring-1 ring-emerald-200
+                     {% else %}bg-white border border-slate-200 hover:border-slate-400{% endif %}">
+          <input type="hidden" name="issue_cv_id" value="{{ i.issue_cv_id }}">
+          <div class="flex items-start gap-3">
+            <div class="w-12 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+              {% if i.cover_url %}
+                <img src="{{ i.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+              {% endif %}
+            </div>
+            <div class="min-w-0">
+              {% if i.is_suggested %}
+                <div class="text-xs uppercase tracking-wide text-emerald-700 font-semibold">
+                  Parsed-number match
+                </div>
+              {% endif %}
+              <div class="text-sm font-medium text-slate-900">
+                <span class="font-mono">#{{ i.issue_number or "?" }}</span>
+              </div>
+              {% if i.name %}
+                <div class="text-xs text-slate-500 truncate">{{ i.name }}</div>
+              {% endif %}
+              <div class="text-xs text-slate-400 mt-0.5">
+                {% if i.cover_date %}{{ i.cover_date }} &middot; {% endif %}
+                <a href="{{ cv_issue_url(i.issue_cv_id) }}" target="_blank" rel="noopener noreferrer"
+                   class="hover:underline" title="Open on ComicVine">CV issue <span class="font-mono">{{ i.issue_cv_id }}</span></a>
+              </div>
+            </div>
+          </div>
+          <button type="submit"
+                  class="w-full rounded-md text-xs font-semibold px-3 py-2
+                         {% if i.is_suggested %}bg-slate-900 text-white hover:bg-slate-800
+                         {% else %}border border-slate-300 bg-white text-slate-700 hover:bg-slate-100{% endif %}">
+            Confirm this issue
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+
+      {{ load_more_buttons() }}
+    </div>
+  {% else %}
+    <div class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+      This volume has no issues in our cache. It may still be hydrating —
+      reload in a moment, or
+      <a href="/review/{{ review.file_id }}/volume-search{% if back_query %}?q={{ back_query|urlencode }}{% endif %}"
+         class="text-slate-700 hover:underline">pick a different volume</a>.
+    </div>
+  {% endif %}
+</main>
+{% endblock %}

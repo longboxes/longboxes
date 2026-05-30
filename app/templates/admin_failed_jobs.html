@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Failed jobs &middot; Admin &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-5xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/admin/health" class="hover:underline">&larr; Admin health</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Failed jobs</h1>
+    <p class="text-sm text-slate-600">
+      Background jobs that raised an unhandled exception. Transient
+      causes (event-loop races, OOM-kills, Redis hiccups) usually
+      succeed on a re-run. A sticky cause &mdash; the same file
+      failing every time &mdash; usually means the archive is
+      corrupt or hits an edge case in the parser; the path below
+      lets you find it on disk.
+    </p>
+  </div>
+
+  {# Banner — feedback for the most recent action, if any. #}
+  {% if request.query_params.get('requeued_all') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      Re-queued {{ request.query_params.get('requeued_all') }} job{{ "s" if request.query_params.get('requeued_all') != "1" else "" }}. They'll run in order.
+    </div>
+  {% elif request.query_params.get('requeued') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      Re-queued one job.
+    </div>
+  {% elif request.query_params.get('cleared_all') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      Cleared {{ request.query_params.get('cleared_all') }} failed job{{ "s" if request.query_params.get('cleared_all') != "1" else "" }} from the registry.
+    </div>
+  {% elif request.query_params.get('deleted') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      Deleted one failed job.
+    </div>
+  {% endif %}
+
+  {% if total == 0 %}
+    <section class="bg-white border border-slate-200 rounded-lg p-8 text-center text-sm text-slate-500">
+      No failed jobs. The worker hasn't recorded any unhandled
+      exceptions since the registry was last cleared.
+    </section>
+  {% else %}
+    {# Bulk action — first line of triage when most failures share
+       the same exception class. #}
+    <section class="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-sm font-medium text-slate-800">
+          {{ total }} failed job{{ "s" if total != 1 else "" }}
+        </div>
+        <div class="text-xs text-slate-500">
+          Re-queueing is safe &mdash; the worker re-runs each job
+          from scratch. A sticky failure will land back here; a
+          transient one will succeed and disappear.
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <form method="post" action="/admin/failed-jobs/requeue-all"
+              onsubmit="return confirm('Re-queue all {{ total }} failed jobs?')">
+          <button type="submit"
+                  class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800">
+            Re-queue all
+          </button>
+        </form>
+        {# Clear-all is the right action when the failures reference
+           functions that no longer exist in the worker (e.g., the
+           per-issue scraper we removed) — re-queuing those would
+           just crash again with ModuleNotFoundError. Rose styling
+           to make the destructive nature visible. #}
+        <form method="post" action="/admin/failed-jobs/clear-all"
+              onsubmit="return confirm('Permanently delete all {{ total }} failed jobs? They can\'t be recovered.')">
+          <button type="submit"
+                  class="rounded-md border border-rose-300 bg-white text-rose-700 text-sm font-medium px-4 py-2 hover:bg-rose-50">
+            Clear all
+          </button>
+        </form>
+      </div>
+    </section>
+
+    {# Per-exception-class summary. Sorted by count descending so the
+       dominant failure mode is the first card. Click-to-jump anchor
+       below each header so the full list per class is one click
+       away on a busy page. #}
+    {% for exc_class, items in grouped %}
+      <section class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <header class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div class="min-w-0">
+            <h2 class="text-sm font-semibold text-slate-900 font-mono break-all">{{ exc_class }}</h2>
+            <p class="text-xs text-slate-500">
+              {{ items|length }} job{{ "s" if items|length != 1 else "" }}
+            </p>
+          </div>
+          {# Per-class bulk actions — same Re-queue / Delete semantics as
+             the per-row buttons, but applied across every job whose
+             parsed exception class matches this header. The right level
+             of granularity when a single bug produces N identical rows
+             (16 stale FK violations, every UnboundLocalError) and the
+             operator wants them all gone in one click. #}
+          <div class="shrink-0 flex items-center gap-1.5">
+            <form method="post" action="/admin/failed-jobs/by-class/requeue"
+                  onsubmit="return confirm('Re-queue all {{ items|length }} job{{ "s" if items|length != 1 else "" }} in this group?')">
+              <input type="hidden" name="exc_class" value="{{ exc_class }}">
+              <button type="submit"
+                      class="rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-100">
+                Re-queue all
+              </button>
+            </form>
+            <form method="post" action="/admin/failed-jobs/by-class/clear"
+                  onsubmit="return confirm('Permanently delete all {{ items|length }} job{{ "s" if items|length != 1 else "" }} in this group? They can\'t be recovered.')">
+              <input type="hidden" name="exc_class" value="{{ exc_class }}">
+              <button type="submit"
+                      class="rounded-md border border-rose-300 bg-white text-rose-700 text-xs font-medium px-3 py-1.5 hover:bg-rose-50"
+                      title="Drop every row in this group from the failed registry">
+                Clear all
+              </button>
+            </form>
+          </div>
+        </header>
+        <ul class="divide-y divide-slate-100">
+          {% for r in items %}
+            <li class="px-4 py-3 flex flex-wrap items-start gap-3">
+              <div class="flex-1 min-w-0">
+                {% if r.file_path %}
+                  <div class="text-sm font-mono text-slate-800 break-all">{{ r.file_path }}</div>
+                {% else %}
+                  <div class="text-sm font-mono text-slate-800">{{ r.args_summary }}</div>
+                {% endif %}
+                {% if r.exc_message %}
+                  <div class="text-xs text-rose-700 mt-1 font-mono break-all">{{ r.exc_message }}</div>
+                {% endif %}
+                <div class="text-xs text-slate-400 mt-1 flex flex-wrap gap-x-3">
+                  <span>{{ r.function_name }}</span>
+                  {% if r.failed_at %}<span>failed {{ r.failed_at[:19] }}Z</span>{% endif %}
+                  {% if r.file_id %}
+                    <a href="/review/{{ r.file_id }}" class="text-slate-500 hover:underline">review file</a>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="shrink-0 flex items-center gap-1.5">
+                <form method="post" action="/admin/failed-jobs/{{ r.job_id }}/requeue">
+                  <button type="submit"
+                          class="rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-100">
+                    Re-queue
+                  </button>
+                </form>
+                <form method="post" action="/admin/failed-jobs/{{ r.job_id }}/delete"
+                      onsubmit="return confirm('Permanently delete this failed job?')">
+                  <button type="submit"
+                          class="rounded-md border border-rose-300 bg-white text-rose-700 text-xs font-medium px-3 py-1.5 hover:bg-rose-50"
+                          title="Drop this row from the failed registry — use when the function no longer exists">
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+  {% endif %}
+</main>
+{% endblock %}

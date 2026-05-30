@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Add a local entry &middot; Review &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+{% from "_reader_link.html" import reader_link %}
+
+{# Phase 11B — the create-local-entry form. For a file whose comic has
+   no ComicVine record at all: the reviewer hand-enters core ID metadata
+   and the file joins the library as a local issue. The volume field is
+   a find-or-create picker — existing local volumes are preloaded into
+   the page and filtered client-side as the user types, so issue #2 of
+   an indie series attaches to the same local volume as issue #1. #}
+
+<main class="max-w-2xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/review/{{ review.file_id }}" class="hover:underline">← Back to file review</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Add as a local entry</h1>
+    <p class="text-sm text-slate-600">
+      For a comic that isn't in ComicVine. Enter the core details and the
+      file joins your library as a local issue — it leaves the review
+      queue and the matcher won't touch it again.
+    </p>
+  </div>
+
+  {# File context — cover + filename + the parsed signals the form is
+     seeded from, so the reviewer can sanity-check what they're entering. #}
+  <section class="bg-white border border-slate-200 rounded-lg p-4 flex gap-4">
+    <div class="relative w-16 shrink-0 self-start rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+      <img src="/review/file/{{ review.file_id }}/cover" alt=""
+           class="absolute inset-0 w-full h-full object-cover">
+      {{ reader_link(review.file_id) }}
+    </div>
+    <div class="min-w-0 text-sm">
+      <div class="font-medium text-slate-900 break-all">{{ review.filename }}</div>
+      <div class="text-xs text-slate-500 break-all">{{ review.path }}</div>
+      <div class="text-xs text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+        <span class="text-slate-400">parsed:</span>
+        {% set ds = review.parsed_long_series if (review.parsed_long_series and review.parsed_long_series != review.parsed_series) else review.parsed_series %}
+        <span>series
+          {% if ds %}<span class="font-mono text-slate-600">{{ ds }}</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </span>
+        <span>#
+          {% if review.parsed_issue_number %}<span class="font-mono text-slate-600">{{ review.parsed_issue_number }}</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </span>
+        <span>year
+          {% if review.parsed_year %}<span class="font-mono text-slate-600">{{ review.parsed_year }}</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  {# The form. ``x-data`` is single-quoted so the ``tojson`` payloads
+     (which carry double quotes, and escape single quotes) embed safely;
+     all JS string literals below therefore use double quotes. #}
+  <form method="post" action="/review/{{ review.file_id }}/local"
+        x-data='{
+          volumes: {{ local_volumes | tojson }},
+          volumeName: {{ (review.parsed_long_series or review.parsed_series or "") | tojson }},
+          volumeYear: {{ (review.parsed_volume_year or "") | tojson }},
+          publisherName: "",
+          description: "",
+          selectedId: "",
+          showList: false,
+          matches() {
+            const q = this.volumeName.trim().toLowerCase();
+            const list = q
+              ? this.volumes.filter(v => v.name.toLowerCase().includes(q))
+              : this.volumes;
+            return list.slice(0, 8);
+          },
+          isExisting() { return this.selectedId !== ""; },
+          pickExisting(v) {
+            this.selectedId = v.id;
+            this.volumeName = v.name;
+            this.volumeYear = v.year || "";
+            this.publisherName = v.publisher_name || "";
+            this.description = v.description || "";
+            this.showList = false;
+          },
+          clearExisting() {
+            this.selectedId = "";
+            this.volumeYear = "";
+            this.publisherName = "";
+            this.description = "";
+          },
+          onNameInput() {
+            if (this.selectedId) {
+              const sel = this.volumes.find(v => v.id === this.selectedId);
+              if (!sel || sel.name !== this.volumeName) this.selectedId = "";
+            }
+            this.showList = true;
+          }
+        }'
+        class="bg-white border border-slate-200 rounded-lg p-4 sm:p-5 space-y-5">
+
+    {# ---- Series / volume — find-or-create ---- #}
+    <div class="space-y-3">
+      <div class="text-sm font-semibold text-slate-800">Series / volume</div>
+
+      <div class="relative" @click.away="showList = false">
+        <label class="block">
+          <span class="text-xs text-slate-500">Volume name</span>
+          <input type="text" name="volume_name" required autocomplete="off"
+                 x-model="volumeName"
+                 @focus="showList = true" @input="onNameInput()"
+                 placeholder="e.g. My Indie Series"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+        </label>
+        {# Carries the chosen existing volume id; blank ⇒ create new. #}
+        <input type="hidden" name="local_volume_id" :value="selectedId">
+
+        {# Autocomplete: existing local volumes matching what's typed. #}
+        <div x-show="showList && matches().length > 0" x-cloak
+             class="absolute z-20 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+          <template x-for="v in matches()" :key="v.id">
+            <button type="button" @click="pickExisting(v)"
+                    class="block w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-b-0">
+              <span class="text-sm font-medium text-slate-900" x-text="v.name"></span>
+              <span class="text-sm text-slate-400" x-text="v.year ? ' (' + v.year + ')' : ''"></span>
+              <span class="block text-xs text-slate-400" x-text="v.publisher_name || ''"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      {# Find-or-create indicator. #}
+      <div class="text-xs">
+        <template x-if="isExisting()">
+          <span class="text-emerald-700">
+            Attaching to an existing local volume.
+            <button type="button" @click="clearExisting()"
+                    class="underline hover:no-underline">Create a new one instead</button>
+          </span>
+        </template>
+        <template x-if="!isExisting()">
+          <span class="text-slate-500">A new local volume will be created.</span>
+        </template>
+      </div>
+
+      {# Year + publisher + description — editable when creating a new
+         volume; shown read-only (and not submitted) once an existing
+         volume is picked. Attaching a file to an existing volume never
+         rewrites that volume's metadata — its own edit page does that. #}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-xs text-slate-500">Volume year</span>
+          <input type="number" name="volume_year"
+                 x-model="volumeYear" :disabled="isExisting()"
+                 placeholder="e.g. 2018"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none disabled:bg-slate-50 disabled:text-slate-400">
+        </label>
+        <label class="block">
+          <span class="text-xs text-slate-500">Publisher
+            <span class="text-slate-300">(optional)</span></span>
+          <input type="text" name="publisher_name"
+                 x-model="publisherName" :disabled="isExisting()"
+                 placeholder="e.g. self-published"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none disabled:bg-slate-50 disabled:text-slate-400">
+        </label>
+      </div>
+
+      {# Description — editable for a new volume; shows the picked
+         volume's existing blurb (read-only, not submitted) when
+         attaching to one. ``x-model`` owns the value, so the <textarea>
+         tags stay empty. #}
+      <label class="block">
+        <span class="text-xs text-slate-500">Description
+          <span class="text-slate-300">(optional)</span></span>
+        <textarea name="description" rows="3"
+                  x-model="description" :disabled="isExisting()"
+                  placeholder="A short blurb about this volume."
+                  class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none disabled:bg-slate-50 disabled:text-slate-400"></textarea>
+      </label>
+    </div>
+
+    {# ---- This issue ---- #}
+    <div class="space-y-3 border-t border-slate-100 pt-5">
+      <div class="text-sm font-semibold text-slate-800">This issue</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-xs text-slate-500">Issue number</span>
+          <input type="text" name="issue_number"
+                 value="{{ review.parsed_issue_number or '' }}"
+                 placeholder="e.g. 1, .5, Annual 1"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+        </label>
+        <label class="block">
+          <span class="text-xs text-slate-500">Issue title
+            <span class="text-slate-300">(optional)</span></span>
+          <input type="text" name="issue_name"
+                 placeholder="e.g. The First Chapter"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+        </label>
+      </div>
+    </div>
+
+    {# ---- Actions ---- #}
+    <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
+      <button type="submit"
+              class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800">
+        Save as local entry
+      </button>
+      <a href="/review/{{ review.file_id }}"
+         class="text-sm text-slate-600 hover:text-slate-900">Cancel</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

@@ -1,0 +1,76 @@
+{# Live countdown toast for background hydration.
+
+   Renders a small fixed-position pill in the bottom-right corner
+   that shows how many items the page is still waiting on. Pinned
+   to the viewport (``fixed``) so it sticks even as the user scrolls
+   through long volume / arc lists.
+
+   Depends on Alpine state from ``setupAutoRefresh``:
+
+     pendingCount  — number of items still waiting. Updated as
+                     polling drains the pending set, or as pagination
+                     enqueues new ones.
+
+   The macro must be invoked inside an Alpine x-data scope that
+   spreads ``setupAutoRefresh``. The pill hides itself with
+   ``x-show="pendingCount > 0"`` and uses a fade-and-slide
+   transition so it appears smoothly on first load and again on
+   each loadMore that enqueues fresh work, and disappears once the
+   pending set drains to zero.
+
+   ``label`` is the singular noun for the items being hydrated
+   ("cover", "card", "arc cover"); the macro pluralizes by
+   appending 's' when ``pendingCount !== 1``. #}
+{% macro hydration_toast(label='item') %}
+  <div x-show="pendingCount > 0"
+       x-cloak
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0 translate-y-2"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100 translate-y-0"
+       x-transition:leave-end="opacity-0 translate-y-2"
+       role="status"
+       aria-live="polite"
+       class="fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-slate-900 text-white text-sm font-medium pl-3 pr-4 py-2 shadow-lg">
+    {# Spinner ring — pure CSS rotation, no external sprite. The
+       border trick: 2px solid white at 30% opacity for the track,
+       a fully-opaque top border that rotates. #}
+    <span class="block w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+    {# When the polling endpoint returns a ``queue_status`` snapshot
+       (see ``get_job_position`` in ``app/jobs/queue_status.py``),
+       render a more useful state line — "running", "in queue
+       position N of M", "rate-limit cooldown — Xm". Pages whose
+       endpoints don't return ``queue_status`` see ``queueStatus``
+       stay null and fall through to the simple "N items loading"
+       form. ``x-show`` (not ``x-if``) keeps the DOM nodes around
+       so Alpine doesn't re-render the whole pill on each state
+       transition, just toggles which sub-line is visible. #}
+    <template x-if="queueStatus && queueStatus.state === 'started'">
+      <span>Hydration running — covers landing shortly…</span>
+    </template>
+    <template x-if="queueStatus && queueStatus.state === 'queued'">
+      <span>
+        In queue, position
+        <span x-text="queueStatus.position"></span>
+        of
+        <span x-text="queueStatus.depth"></span>
+      </span>
+    </template>
+    <template x-if="queueStatus && queueStatus.state === 'scheduled'">
+      <span>
+        Rate-limit cooldown —
+        <span x-text="Math.max(1, Math.round((queueStatus.retry_after || 0) / 60))"></span>m remaining
+      </span>
+    </template>
+    <template x-if="!queueStatus
+                    || queueStatus.state === 'done'
+                    || queueStatus.state === 'missing'">
+      <span>
+        <span x-text="pendingCount"></span>
+        <span x-text="pendingCount === 1 ? '{{ label }}' : '{{ label }}s'"></span>
+        loading…
+      </span>
+    </template>
+  </div>
+{% endmacro %}

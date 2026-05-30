@@ -1,0 +1,14 @@
+{# A thin reading-progress bar pinned to the bottom edge of a cover.
+
+   Drop ``progress_bar(p)`` inside a ``relative`` cover box; ``p`` is a
+   ProgressBar (see app/services/reader.py) or None. It renders nothing
+   when None, so it is safe to call unconditionally. The emerald fill
+   width is the read percentage; the tooltip carries the page label. #}
+{% macro progress_bar(progress) %}
+  {%- if progress -%}
+    <div class="absolute inset-x-0 bottom-0 h-1.5 bg-slate-900/45 z-10"
+         title="{{ progress.label }}">
+      <div class="h-full bg-emerald-500" style="width: {{ progress.percent }}%"></div>
+    </div>
+  {%- endif -%}
+{% endmacro %}

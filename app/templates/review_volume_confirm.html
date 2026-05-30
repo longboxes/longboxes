@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}Confirm volume &middot; Review &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+{% from "_format_macros.html" import format_badge, volume_info_popover %}
+{% from "_reader_link.html" import reader_link %}
+{% from "_hydration_toast.html" import hydration_toast %}
+{% from "_matched_cover.html" import matched_cover %}
+
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-6"
+      x-data="{
+        {# Spread ``setupAutoRefresh`` so any matched-cover thumbnail
+           still in the stub state polls the covers endpoint and gets
+           swapped to the real cover when ``volume_issues`` bulk
+           hydration runs. ``scanPending`` reads the
+           ``data-pending-id``+``data-hydrated='false'`` attributes
+           emitted by the ``matched_cover`` macro and starts the
+           polling loop only when there's work to do — fully hydrated
+           pages are silent. #}
+        ...setupAutoRefresh({ endpoint: '/review/volume-confirm/{{ preview.volume_cv_id }}/covers' }),
+        selected: {{ preview.confirm_count }},
+        init() { this.scanPending(); }
+      }">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/review" class="hover:underline">← Review queue</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Confirm volume</h1>
+    <p class="text-sm text-slate-600">
+      Every PENDING file in the
+      <span class="font-mono text-slate-700">{{ preview.series_key or "(unparsed)" }}</span>
+      group, paired with the corresponding issue in the chosen volume.
+      Checked rows are written as <span class="font-mono">CONFIRMED</span>;
+      uncheck a row to exclude it and leave it
+      <span class="font-mono">PENDING</span>.
+    </p>
+  </div>
+
+  {# Card 1 — Detected. What the files themselves say: the parsed
+     series name, the cover of the first file as a representative
+     thumbnail, and the year range across the group. This is the
+     "input" side — the matcher's read of the files, before any
+     human decision. #}
+  <section class="bg-white border border-slate-200 rounded-lg p-4 flex items-start gap-4">
+    <div class="relative w-20 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+      {% if preview.items %}
+        <img src="/review/file/{{ preview.items[0].file_id }}/cover" alt=""
+             class="absolute inset-0 w-full h-full object-cover">
+        {{ reader_link(preview.items[0].file_id) }}
+      {% endif %}
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-xs uppercase tracking-wide text-slate-400">Detected from files</div>
+      <div class="text-lg font-semibold text-slate-900">
+        {{ preview.series_key or "(unparsed series)" }}
+      </div>
+      {% set detected_years = preview.items | map(attribute='parsed_year') | select | list %}
+      <div class="text-xs text-slate-500 mt-1">
+        {% if detected_years %}
+          {% if detected_years|min == detected_years|max %}
+            year <span class="font-mono text-slate-700">{{ detected_years|min }}</span>
+          {% else %}
+            years <span class="font-mono text-slate-700">{{ detected_years|min }}&ndash;{{ detected_years|max }}</span>
+          {% endif %}
+          &middot;
+        {% endif %}
+        {{ preview.items|length }} file{{ "s" if preview.items|length != 1 else "" }} in this group
+      </div>
+    </div>
+  </section>
+
+  {# Card 2 — Selected volume + collapsible candidate switcher. The
+     CV volume currently chosen as the confirm target, plus the
+     Confirm action. The other candidate volumes the matcher
+     considered are tucked into a collapsed expander so the file-by-
+     file table below stays above the fold; the reviewer expands it
+     only when they want to switch targets. ``border-slate-300`` +
+     shadow gives the card weight as the page's primary action. #}
+  {% set others = preview.volume_options | rejectattr('volume_cv_id', 'equalto', preview.volume_cv_id) | list %}
+  <section class="bg-white border border-slate-300 shadow-sm rounded-lg p-4 space-y-3"
+           x-data="{ showCandidates: false }">
+    {# Cover + volume info on one line, the action buttons alongside
+       on md+ and dropped to a full-width block below on mobile — a
+       fixed w-48 action column won't fit beside the text on a phone,
+       and overflowed onto it. #}
+    <div class="flex flex-col gap-4 md:flex-row md:items-start">
+      <div class="flex items-start gap-4 md:flex-1 md:min-w-0">
+        <div class="relative w-20 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+          {% if preview.volume_cover_url %}
+            <img src="{{ preview.volume_cover_url }}" alt="" class="absolute inset-0 w-full h-full object-cover">
+          {% endif %}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs uppercase tracking-wide text-slate-400">Selected volume &middot; confirming to</div>
+          <div class="text-lg font-semibold text-slate-900">
+            <a href="/volume/{{ preview.volume_cv_id }}" class="hover:underline">
+              {{ preview.volume_name or "(unknown)" }}
+            </a>
+            {% if preview.volume_year %}
+              <span class="text-slate-400 font-normal">({{ preview.volume_year }})</span>
+            {% endif %}
+            {{ volume_info_popover(preview.volume_description) }}
+          </div>
+          <div class="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+            {{ format_badge(preview.volume_format) }}
+            <span>
+              {% if preview.volume_publisher %}{{ preview.volume_publisher }} &middot; {% endif %}
+              <a href="{{ cv_volume_url(preview.volume_cv_id) }}" target="_blank" rel="noopener noreferrer"
+                 class="hover:underline" title="Open on ComicVine">CV volume <span class="font-mono">{{ preview.volume_cv_id }}</span></a>
+              &middot; <a href="/volume/{{ preview.volume_cv_id }}" class="text-slate-500 hover:underline">open volume page</a>
+            </span>
+          </div>
+        </div>
+      </div>
+      {# Action column — primary Confirm plus a secondary "search for
+         a volume" escape hatch for when none of the matcher's
+         candidates is the right one. Full-width on mobile, a fixed
+         w-48 column on md+; both buttons stretch to it as an even
+         pair. #}
+      <div class="shrink-0 flex flex-col gap-2 w-full md:w-48">
+        {# Submits the file list's form via ``form=`` — see the
+           ``#volume-confirm-form`` below. Count + disabled state track
+           the live checkbox selection. #}
+        <button type="submit" form="volume-confirm-form"
+                {% if preview.confirm_count == 0 %}disabled{% endif %}
+                :disabled="selected === 0"
+                class="w-full rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">
+          Confirm <span x-text="selected">{{ preview.confirm_count }}</span>
+          <span x-text="selected === 1 ? 'match' : 'matches'">{{ "match" if preview.confirm_count == 1 else "matches" }}</span>
+        </button>
+        <a href="/review/volume-search?series={{ preview.series_key|default('', true)|urlencode }}"
+           class="w-full text-center rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-100">
+          Search for a volume
+        </a>
+      </div>
+    </div>
+
+    {# Collapsible other-candidates switcher. Default collapsed so it
+       doesn't push the preview table down; only rendered at all when
+       there are alternative volumes to switch to. #}
+    {% if others %}
+      <div class="border-t border-slate-100 pt-3">
+        <button type="button" @click="showCandidates = !showCandidates"
+                class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900">
+          <svg xmlns="http://www.w3.org/2000/svg"
+               class="w-3.5 h-3.5 transition-transform"
+               :class="showCandidates ? 'rotate-180' : ''"
+               fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+          <span x-show="!showCandidates">Show {{ others|length }} other candidate volume{{ "s" if others|length != 1 else "" }}</span>
+          <span x-show="showCandidates" x-cloak>Hide other candidate volumes</span>
+        </button>
+        <div x-show="showCandidates" x-cloak class="mt-3 space-y-2">
+          <p class="text-xs text-slate-500">
+            Click a volume to re-preview the confirm against it instead.
+          </p>
+          <div class="flex flex-wrap gap-3">
+            {% for opt in others %}
+              <a href="/review/volume-confirm?series={{ preview.series_key|default('', true)|urlencode }}&volume={{ opt.volume_cv_id }}"
+                 class="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 w-full md:w-72 hover:border-slate-400 hover:shadow-sm transition">
+                <div class="relative w-10 shrink-0 rounded overflow-hidden bg-slate-200" style="aspect-ratio: 2 / 3;">
+                  {% if opt.cover_url %}
+                    <img src="{{ opt.cover_url }}" alt="" loading="lazy" class="absolute inset-0 w-full h-full object-cover">
+                  {% endif %}
+                </div>
+                <div class="min-w-0">
+                  {# Info icon sits outside the ``truncate`` span — that
+                     span is overflow-hidden and would clip the popover. #}
+                  <div class="text-sm font-medium text-slate-900 flex items-center gap-1">
+                    <span class="truncate">
+                      {{ opt.volume_name or "(unknown)" }}
+                      {% if opt.volume_year %}<span class="text-slate-400 font-normal">({{ opt.volume_year }})</span>{% endif %}
+                    </span>
+                    {{ volume_info_popover(opt.description) }}
+                  </div>
+                  <div class="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                    {{ format_badge(opt.format) }}
+                    <span>
+                      {% if opt.publisher %}{{ opt.publisher }} &middot; {% endif %}
+                      CV <span class="font-mono">{{ opt.volume_cv_id }}</span>
+                      &middot; <span class="font-mono">{{ opt.count_in_group }}</span>
+                      candidate match{{ "es" if opt.count_in_group != 1 else "" }}
+                    </span>
+                  </div>
+                </div>
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+
+  {# File-by-file preview list. Each row pairs a file (cover from
+     /review/file/{id}/cover + filename + parsed number) with its
+     matched issue (cover + issue number + name). A table-like row on
+     md+; on mobile it stacks — each cover sits above its own info.
+     Skip rows tint amber and show the skip reason in place of an
+     issue. #}
+  {% if preview.items %}
+    {# Table wrapped in one form. The Confirm buttons in Card 2 and
+       at the page foot submit it via ``form="volume-confirm-form"``
+       rather than being physically nested. Each confirmable row
+       carries a checkbox so the reviewer can exclude a file the
+       matcher mis-mapped within an otherwise-correct volume. #}
+    <form id="volume-confirm-form" method="post" action="/review/volume-confirm">
+    <input type="hidden" name="series" value="{{ preview.series_key or '' }}">
+    <input type="hidden" name="volume" value="{{ preview.volume_cv_id }}">
+    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      {# Desktop column header. Hidden on mobile, where each row is a
+         self-contained stacked card. Spacer widths track the row's
+         checkbox + connector columns so the labels line up. #}
+      <div class="hidden md:flex items-center gap-3 px-3 py-2 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <div class="w-4 shrink-0"></div>
+        <div class="flex-1 min-w-0">File</div>
+        <div class="w-4 shrink-0"></div>
+        <div class="flex-1 min-w-0">Matched issue</div>
+      </div>
+      {% for item in preview.items %}
+        {# One file → issue pair. A table-like row on md+ (checkbox ·
+           file · → · matched issue); on mobile it stacks, each cover
+           sitting above its own info with a "↓ Matched issue" divider
+           between. Skip rows tint amber. #}
+        <div class="flex flex-col gap-3 p-3 border-t border-slate-100
+                    md:flex-row md:items-start md:gap-3 md:py-2
+                    {% if not item.will_confirm %}bg-amber-50/40{% endif %}">
+          {# Include checkbox — confirmable rows only. Unchecking
+             decrements the live ``selected`` counter the Confirm
+             buttons read; skip rows leave the slot empty. #}
+          <div class="w-4 shrink-0 md:pt-1">
+            {% if item.will_confirm %}
+              <input type="checkbox" name="file_ids" value="{{ item.file_id }}" checked
+                     @change="selected += $event.target.checked ? 1 : -1"
+                     class="h-4 w-4 accent-slate-900 cursor-pointer"
+                     aria-label="Include this file in the confirm">
+            {% endif %}
+          </div>
+          {# File — cover over info on mobile, cover beside info on
+             md+. ``relative`` box + ``absolute inset-0`` img keeps the
+             cover a true 2:3; ``self-start`` stops the md+ row from
+             stretching it to the text's height. #}
+          <div class="flex flex-col gap-2 md:flex-row md:gap-3 md:flex-1 md:min-w-0">
+            <div class="relative self-start w-16 md:w-10 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+              <img src="/review/file/{{ item.file_id }}/cover" alt="" loading="lazy"
+                   class="absolute inset-0 w-full h-full object-cover">
+              {{ reader_link(item.file_id) }}
+            </div>
+            <div class="min-w-0">
+              <div class="font-medium text-slate-900 break-all">{{ item.filename }}</div>
+              <div class="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
+                <span>parsed
+                  <span class="font-mono text-slate-700">#{{ item.parsed_issue_number or "?" }}</span>
+                </span>
+                {% if item.parsed_year %}
+                  <span>year <span class="font-mono text-slate-700">{{ item.parsed_year }}</span></span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {# File → issue connector — ``→`` between the columns on md+,
+             a labelled ``↓`` divider when the row is stacked. #}
+          <div class="flex items-center gap-1.5 text-slate-400 md:self-center">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="w-4 h-4 shrink-0 rotate-90 md:rotate-0"
+                 fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+            <span class="text-xs uppercase tracking-wide md:hidden">Matched issue</span>
+          </div>
+          {# Matched issue — same cover-over-info / cover-beside-info
+             split; skip rows show a dashed placeholder + the reason. #}
+          <div class="flex flex-col gap-2 md:flex-row md:gap-3 md:flex-1 md:min-w-0">
+            {% if item.will_confirm %}
+              {{ matched_cover(item.matched_issue_cv_id, item.matched_issue_cover_url) }}
+              <div class="min-w-0">
+                <div class="text-slate-900">
+                  <span class="font-mono">#{{ item.matched_issue_number or "?" }}</span>
+                  {% if item.matched_issue_name %}
+                    &middot; {{ item.matched_issue_name }}
+                  {% endif %}
+                </div>
+                <div class="text-xs text-slate-400 mt-0.5">
+                  <a href="{{ cv_issue_url(item.matched_issue_cv_id) }}" target="_blank" rel="noopener noreferrer"
+                     class="hover:underline" title="Open on ComicVine">CV issue <span class="font-mono">{{ item.matched_issue_cv_id }}</span></a>
+                </div>
+              </div>
+            {% else %}
+              <div class="self-start w-16 md:w-10 shrink-0 rounded border border-dashed border-amber-300 bg-amber-50" style="aspect-ratio: 2 / 3;"></div>
+              <div class="min-w-0">
+                <div class="text-amber-800 text-sm">Will stay PENDING</div>
+                <div class="text-xs text-amber-700 mt-0.5">{{ item.skip_reason }}</div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    </form>
+  {% else %}
+    <div class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+      No PENDING files match this series. The queue may have moved since you
+      loaded it — <a href="/review" class="text-slate-700 hover:underline">return to /review</a>.
+    </div>
+  {% endif %}
+
+  <div class="flex items-center justify-between">
+    <a href="/review" class="text-sm text-slate-600 hover:text-slate-900">← Back to queue without confirming</a>
+    {% if preview.confirm_count > 0 %}
+      <button type="submit" form="volume-confirm-form"
+              :disabled="selected === 0"
+              class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">
+        Confirm <span x-text="selected">{{ preview.confirm_count }}</span>
+        <span x-text="selected === 1 ? 'match' : 'matches'">{{ "match" if preview.confirm_count == 1 else "matches" }}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  {# Escape hatch — when none of the candidate volumes is the right one
+     because the series simply isn't in ComicVine. Mirrors the volume-
+     search page's group-mode create-local section: builds a local
+     volume plus one local issue per file in a single step. Guarded on
+     ``preview.items`` so it's hidden once the group has drained — the
+     empty-state branch above already covers that case. #}
+  {% if preview.items %}
+    <section class="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-sm font-medium text-slate-800">None of these in ComicVine?</div>
+        <div class="text-xs text-slate-500">
+          If this whole series has no ComicVine record, create a local
+          volume for the group — one local issue per file, in one step.
+          Or exclude the whole series from matching so the matcher
+          stops surfacing it.
+        </div>
+      </div>
+      <div class="shrink-0 flex flex-wrap items-center gap-2">
+        <a href="/review/local-group?series={{ preview.series_key|default('', true)|urlencode }}"
+           class="rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-100">
+          Create a local volume
+        </a>
+        {# Bulk exclude: one POST flips ``excluded_from_matching`` on
+           every reviewable file in this series group. One-way; no
+           Un-exclude flow on this surface. #}
+        <form method="post" action="/review/group/exclude"
+              onsubmit="return confirm('Exclude every file in this series from matching? This is one-way — the matcher will leave them alone going forward.')">
+          <input type="hidden" name="series" value="{{ preview.series_key|default('', true) }}">
+          <button type="submit"
+                  class="rounded-md border border-rose-300 bg-white text-rose-700 text-sm font-medium px-4 py-2 hover:bg-rose-50">
+            Exclude series from matching
+          </button>
+        </form>
+      </div>
+    </section>
+  {% endif %}
+
+  {# Live countdown toast — shows "N covers loading…" while
+     ``setupAutoRefresh`` polls the covers endpoint for not-yet-
+     hydrated matched issues. Pinned to the viewport bottom-right;
+     hides itself when pendingCount drains to zero. #}
+  {{ hydration_toast(label='cover') }}
+</main>
+{% endblock %}

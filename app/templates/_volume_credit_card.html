@@ -1,0 +1,45 @@
+{# Single row in a volume-credits list (the appearances tab on /character,
+   the credited-volumes tab on /creator, the volumes tab on /team).
+
+   Lives in its own partial so the ``/volume-credits/hydration`` polling
+   endpoint can render one updated row server-side and have
+   ``setupAutoRefresh`` swap it in when the cv_volumes row drops its
+   ``_stub`` marker.
+
+   ``id="volume-credit-<cv_id>"`` is the swap target. Un-hydrated rows
+   carry ``data-pending-id="<cv_id>"`` + ``data-hydrated="false"`` so
+   ``scanPending()`` finds them. Hydrated rows omit the data-attributes
+   entirely — once a row swaps in fully hydrated, the JS drops it from
+   the pending set and stops polling. #}
+{% from "_format_macros.html" import format_badge %}
+
+{% macro volume_credit_card(credit, credit_param=none) %}
+  <li id="volume-credit-{{ credit.cv_id }}"
+      {% if not credit.is_hydrated %}
+        data-pending-id="{{ credit.cv_id }}"
+        data-hydrated="false"
+      {% endif %}>
+    <a href="/volume/{{ credit.cv_id }}{% if credit_param %}?credit={{ credit_param }}{% endif %}"
+       class="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
+      {# Volume cover — an empty 2:3 box until the volume hydrates. #}
+      <span class="w-12 shrink-0 relative block rounded overflow-hidden border border-slate-200 bg-slate-100"
+            style="aspect-ratio: 2 / 3;">
+        {% if credit.cover_url %}
+          <img src="{{ credit.cover_url }}" alt="" loading="lazy"
+               class="absolute inset-0 w-full h-full object-cover">
+        {% else %}
+          <span class="absolute inset-0 flex items-center justify-center text-[9px] text-slate-400">&hellip;</span>
+        {% endif %}
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="block font-medium text-slate-900 truncate">
+          {{ credit.name }}
+          {%- if credit.year %} <span class="text-slate-400 font-normal">({{ credit.year }})</span>{% endif %}
+        </span>
+        {% if credit.format %}
+          <span class="mt-0.5 inline-flex">{{ format_badge(credit.format) }}</span>
+        {% endif %}
+      </span>
+    </a>
+  </li>
+{% endmacro %}

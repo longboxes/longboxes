@@ -1,0 +1,44 @@
+{# "General Information" sidebar card for the team page.
+
+   A stacked definition list built from the ComicVine team payload —
+   see ``TeamInfo`` / ``_team_info`` in app/services/library.py. Every
+   row is conditional, so a field the CV payload didn't carry is simply
+   dropped.
+
+   ``info`` is a ``TeamInfo``. Deliberately holds only facts not shown
+   elsewhere on the page: the publisher has its own ``publisher_chip``
+   block, the member count is in the hero + Members section, and the
+   name / bio live in the hero + About card.
+
+   The ``info_row`` / ``issue_label`` / ``first_appearance_link`` macros
+   are shared with the character info card. #}
+{% from "_character_info_card.html" import info_row, issue_label, first_appearance_link %}
+
+{% macro team_info_card(info) %}
+  <dl class="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
+    {% if info.aliases %}
+      {% call info_row("Aliases") %}
+        <ul class="space-y-0.5">
+          {% for alias in info.aliases %}<li>{{ alias }}</li>{% endfor %}
+        </ul>
+      {% endcall %}
+    {% endif %}
+
+    {% if info.first_appearance %}
+      {% call info_row("First appearance") %}
+        {{ first_appearance_link(info.first_appearance) }}
+      {% endcall %}
+    {% endif %}
+
+    {% if info.disbanded_in %}
+      {% call info_row("Disbanded in") %}
+        <ul class="space-y-0.5">
+          {% for issue in info.disbanded_in %}
+            <li><a href="/issue/{{ issue.cv_id }}"
+                   class="text-emerald-700 hover:text-emerald-900 hover:underline">{{ issue_label(issue) }}</a></li>
+          {% endfor %}
+        </ul>
+      {% endcall %}
+    {% endif %}
+  </dl>
+{% endmacro %}

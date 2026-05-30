@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}Volume search &middot; Review &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+{% from "_format_macros.html" import format_badge, volume_info_popover %}
+{% from "_reader_link.html" import reader_link %}
+{% from "_volume_search_card.html" import volume_card_inner %}
+
+{# Shared by three routes:
+     * group mode — /review/volume-search (context: ``series``, ``reference``)
+     * file mode  — /review/{id}/volume-search (context: ``review``)
+     * fix-match mode — /volume/{old_cv_id}/fix-match (context:
+       ``fix_match``=True, ``old_volume``)
+   Mode flags switch the breadcrumb, reference card, search-form
+   action, per-result element, and the bottom escape hatch. In file
+   mode a result goes to the per-file issue picker (step 2 of the
+   volume → issue funnel); in group mode it goes to the
+   volume-confirm preview; in fix-match mode it's a POST form that
+   re-maps every owned file from the old volume to the picked one. #}
+{% set file_mode = review is defined %}
+{% set fix_match_mode = fix_match is defined and fix_match %}
+
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-6"
+      x-data='{
+        pubFilter: "",
+        fmtFilter: "",
+        rows: {{ result_facets | tojson }},
+        get visibleCount() {
+          const pf = this.pubFilter.trim().toLowerCase();
+          const ff = this.fmtFilter;
+          return this.rows.filter(r =>
+            (!pf || (r.publisher || "").toLowerCase().includes(pf)) &&
+            (!ff || r.format === ff)
+          ).length;
+        }
+      }'>
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      {% if file_mode %}
+        <a href="/review/{{ review.file_id }}" class="hover:underline">&larr; Back to file review</a>
+      {% elif fix_match_mode %}
+        <a href="/volume/{{ old_volume.cv_id }}" class="hover:underline">&larr; Back to volume</a>
+      {% else %}
+        <a href="/review" class="hover:underline">&larr; Review queue</a>
+      {% endif %}
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">
+      {% if fix_match_mode %}Re-pick the correct volume{% else %}Search for a volume{% endif %}
+    </h1>
+    <p class="text-sm text-slate-600">
+      {% if file_mode %}
+        Search ComicVine for the volume this file belongs to. Pick a
+        result and you'll choose the issue from it next.
+      {% elif fix_match_mode %}
+        Every file currently matched to
+        <span class="font-mono text-slate-700">{{ old_volume.name }}</span>{% if old_volume.year %} <span class="text-slate-400">({{ old_volume.year }})</span>{% endif %}
+        gets re-mapped to the volume you pick — files map to issues by
+        their parsed issue number. Files whose number doesn't exist
+        in the new volume stay where they are.
+      {% else %}
+        Search ComicVine for the right volume{% if series %} for the
+        <span class="font-mono text-slate-700">{{ series }}</span> group{% endif %}.
+        Pick a result to preview a confirm against it.
+      {% endif %}
+    </p>
+  </div>
+
+  {# Reference card — what we're matching. In file mode it's the file
+     itself; in group mode it's the PENDING series group. #}
+  {% if file_mode %}
+    <section class="bg-white border border-slate-200 rounded-lg p-4 flex items-start gap-4">
+      <div class="relative w-16 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+        <img src="/review/file/{{ review.file_id }}/cover" alt="" class="w-full h-full object-cover">
+        {{ reader_link(review.file_id) }}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs uppercase tracking-wide text-slate-400">Matching this file</div>
+        <div class="text-sm font-medium text-slate-900 break-all">{{ review.filename }}</div>
+        <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3">
+          <span class="text-slate-400">parsed:</span>
+          {% set display_series = review.parsed_long_series if (review.parsed_long_series and review.parsed_long_series != review.parsed_series) else review.parsed_series %}
+          <span>series
+            {% if display_series %}<span class="font-mono text-slate-700">{{ display_series }}</span>
+            {% else %}<span class="text-slate-300">—</span>{% endif %}
+          </span>
+          <span>#
+            {% if review.parsed_issue_number %}<span class="font-mono text-slate-700">{{ review.parsed_issue_number }}</span>
+            {% else %}<span class="text-slate-300">—</span>{% endif %}
+          </span>
+          <span>year
+            {% if review.parsed_year %}<span class="font-mono text-slate-700">{{ review.parsed_year }}</span>
+            {% else %}<span class="text-slate-300">—</span>{% endif %}
+          </span>
+        </div>
+        {# File format guess from the page count — nudges the reviewer
+           toward the right kind of volume below. #}
+        {% if review.format_guess != "unknown" %}
+          <div class="text-xs text-slate-600 mt-1.5">
+            {% if review.page_count %}<span class="font-mono text-slate-700">{{ review.page_count }}</span> pages &mdash; {% endif %}
+            {% if review.format_guess == "collection" %}
+              likely a <span class="font-medium">collected edition</span>; look for a Collection volume.
+            {% else %}
+              likely a <span class="font-medium">single issue</span>; look for the issue series.
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </section>
+  {% elif fix_match_mode %}
+    <section class="bg-white border border-rose-200 bg-rose-50/40 rounded-lg p-4 flex items-start gap-4">
+      <div class="text-rose-700 text-xl shrink-0" aria-hidden="true">⚠</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs uppercase tracking-wide text-rose-700">Current (wrong) match</div>
+        <div class="text-lg font-semibold text-slate-900">
+          {{ old_volume.name }}{% if old_volume.year %} <span class="text-slate-400 font-normal">({{ old_volume.year }})</span>{% endif %}
+        </div>
+        <div class="text-xs text-slate-500 mt-1">
+          CV volume <span class="font-mono">{{ old_volume.cv_id }}</span>
+        </div>
+      </div>
+    </section>
+  {% elif reference %}
+    <section class="bg-white border border-slate-200 rounded-lg p-4 flex items-start gap-4">
+      <div class="relative w-16 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+        {% if reference.first_file_id %}
+          <img src="/review/file/{{ reference.first_file_id }}/cover" alt=""
+               class="w-full h-full object-cover">
+          {{ reader_link(reference.first_file_id) }}
+        {% endif %}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs uppercase tracking-wide text-slate-400">Matching for</div>
+        <div class="text-lg font-semibold text-slate-900">
+          {{ reference.series_key or "(unparsed series)" }}
+        </div>
+        <div class="text-xs text-slate-500 mt-1">
+          {% if reference.year_min and reference.year_max %}
+            {% if reference.year_min == reference.year_max %}
+              year <span class="font-mono text-slate-700">{{ reference.year_min }}</span>
+            {% else %}
+              years <span class="font-mono text-slate-700">{{ reference.year_min }}&ndash;{{ reference.year_max }}</span>
+            {% endif %}
+            &middot;
+          {% endif %}
+          {{ reference.file_count }} file{{ "s" if reference.file_count != 1 else "" }} in this group
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  {# Search form. GET so the query lands in the URL. In group mode
+     ``series`` rides along as a hidden field so result links can
+     return to the volume-confirm page. #}
+  <form method="get"
+        action="{% if file_mode %}/review/{{ review.file_id }}/volume-search{% elif fix_match_mode %}/volume/{{ old_volume.cv_id }}/fix-match{% else %}/review/volume-search{% endif %}"
+        class="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-end gap-3">
+    {% if not file_mode and not fix_match_mode %}
+      <input type="hidden" name="series" value="{{ series }}">
+    {% endif %}
+    <label class="flex flex-col flex-1 min-w-0">
+      <span class="text-xs text-slate-500 mb-1">Volume name</span>
+      <input type="text" name="q" value="{{ query }}" autofocus
+             placeholder="e.g. Avengers No More Bullying"
+             class="rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+    </label>
+    <button type="submit"
+            class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800">
+      Search
+    </button>
+  </form>
+
+  {# Note when punctuation was stripped, so the reviewer understands
+     why the box and the actual CV query differ. #}
+  {% if cleaned_query and cleaned_query != query %}
+    <p class="text-xs text-slate-500">
+      Searched ComicVine for
+      <span class="font-mono text-slate-700">{{ cleaned_query }}</span>
+      &mdash; punctuation stripped.
+    </p>
+  {% endif %}
+
+  {% if error %}
+    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      {{ error }}
+    </div>
+  {% elif results %}
+    {# Facets — client-side. CV search returns plenty of noise (obscure
+       publishers, TPB collections, one-shots); the publisher text
+       filter and the format select narrow the cards down together. #}
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="flex items-center gap-2">
+        <span class="text-xs text-slate-500">Filter by publisher</span>
+        <input type="text" x-model="pubFilter" placeholder="e.g. Marvel"
+               class="w-44 rounded-md border border-slate-300 px-2.5 py-1 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+      </label>
+      <label class="flex items-center gap-2">
+        <span class="text-xs text-slate-500">Format</span>
+        <select x-model="fmtFilter"
+                class="rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+          <option value="">All</option>
+          <option value="ongoing">Series</option>
+          <option value="limited">Limited series</option>
+          <option value="one_shot">One-shot</option>
+          <option value="collection">Collection</option>
+        </select>
+      </label>
+      <span class="text-xs text-slate-500">
+        <span x-text="visibleCount">{{ results|length }}</span>
+        of {{ results|length }} volume{{ "s" if results|length != 1 else "" }} shown
+      </span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {% for v in results %}
+        {# In file mode the result goes to the issue picker for that
+           volume; in group mode it goes to the volume-confirm preview;
+           in fix-match mode it's a POST form that re-maps every file
+           from the old volume to this one in a single submit. The
+           outer element type changes by mode but the inner card
+           layout is identical. ``data-publisher`` / ``data-format``
+           drive the client-side facet filters above. #}
+        {% if fix_match_mode %}
+          <form method="post" action="/volume/{{ old_volume.cv_id }}/fix-match"
+                data-publisher="{{ (v.publisher or '')|lower }}"
+                data-format="{{ v.format }}"
+                x-show="(!pubFilter.trim() || $el.dataset.publisher.includes(pubFilter.trim().toLowerCase())) && (!fmtFilter || $el.dataset.format === fmtFilter)"
+                class="flex items-start gap-3 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-400 hover:shadow-sm transition">
+            <input type="hidden" name="new_cv_id" value="{{ v.cv_id }}">
+            <button type="submit" class="contents text-left cursor-pointer">
+              {{ volume_card_inner(v) }}
+            </button>
+          </form>
+        {% else %}
+          <a href="{% if file_mode %}/review/{{ review.file_id }}/volume-issues?volume={{ v.cv_id }}&q={{ query|urlencode }}{% else %}/review/volume-confirm?series={{ series|urlencode }}&volume={{ v.cv_id }}{% endif %}"
+             data-publisher="{{ (v.publisher or '')|lower }}"
+             data-format="{{ v.format }}"
+             x-show="(!pubFilter.trim() || $el.dataset.publisher.includes(pubFilter.trim().toLowerCase())) && (!fmtFilter || $el.dataset.format === fmtFilter)"
+             class="flex items-start gap-3 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-400 hover:shadow-sm transition">
+            {{ volume_card_inner(v) }}
+          </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {# Shown when the facet filters exclude every result. #}
+    <div x-show="visibleCount === 0 && (pubFilter.trim() || fmtFilter)" x-cloak
+         class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+      No results match the current filters.
+    </div>
+  {% elif cleaned_query %}
+    <div class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+      No ComicVine volumes matched
+      <span class="font-mono text-slate-700">{{ cleaned_query }}</span>.
+      Try a shorter or differently-worded name.
+    </div>
+  {% else %}
+    <div class="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500">
+      Enter a volume name above to search ComicVine.
+    </div>
+  {% endif %}
+
+  {# Dead-end escape hatch. A ComicVine search that turns up nothing
+     (or nothing right) is exactly where a reviewer realises the comic
+     isn't catalogued — so surface the create-local path here rather
+     than make them backtrack. File mode offers the per-file form;
+     group mode offers the whole-group bulk create. Fix-match mode
+     skips it — the files were already CV-confirmed; converting them
+     to local entries from this page would be a surprising side-effect. #}
+  {% if fix_match_mode %}
+    {# no escape hatch — see comment above #}
+  {% elif file_mode %}
+    <section class="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-sm font-medium text-slate-800">Not in ComicVine?</div>
+        <div class="text-xs text-slate-500">
+          If this comic has no ComicVine record at all, add it to your
+          library as a local entry — you provide the details by hand.
+        </div>
+      </div>
+      <a href="/review/{{ review.file_id }}/local"
+         class="shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-100">
+        Add as a local entry
+      </a>
+    </section>
+  {% else %}
+    <section class="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-sm font-medium text-slate-800">None of these in ComicVine?</div>
+        <div class="text-xs text-slate-500">
+          If this whole series has no ComicVine record, create a local
+          volume for the group — one local issue per file, in one step.
+          Or exclude the whole series from matching so the matcher
+          stops surfacing it.
+        </div>
+      </div>
+      <div class="shrink-0 flex flex-wrap items-center gap-2">
+        <a href="/review/local-group?series={{ series|urlencode }}"
+           class="rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-100">
+          Create a local volume
+        </a>
+        {# Bulk exclude — mirrors the volume-confirm page's button.
+           One POST flips ``excluded_from_matching`` on every
+           reviewable file in this series group. One-way. #}
+        <form method="post" action="/review/group/exclude"
+              onsubmit="return confirm('Exclude every file in this series from matching? This is one-way — the matcher will leave them alone going forward.')">
+          <input type="hidden" name="series" value="{{ series }}">
+          <button type="submit"
+                  class="rounded-md border border-rose-300 bg-white text-rose-700 text-sm font-medium px-4 py-2 hover:bg-rose-50">
+            Exclude series from matching
+          </button>
+        </form>
+      </div>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

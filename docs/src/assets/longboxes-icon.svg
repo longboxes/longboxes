@@ -1,0 +1,53 @@
+<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-label="Longboxes icon">
+
+  <!-- Interior trapezoid (dark) - what we see through the open top -->
+  <path d="M 33 52 L 63 52 L 54 18 L 42 18 Z"
+        fill="#3D3830" stroke="#1F1B16" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- Comic top edges, BACK section (between back rim and divider 2) -->
+  <line x1="42.7" y1="19.5" x2="53.3" y2="19.5" stroke="#7A7368" stroke-width="0.5" opacity="0.55"/>
+  <line x1="43"   y1="21"   x2="53"   y2="21"   stroke="#7A7368" stroke-width="0.5" opacity="0.55"/>
+  <line x1="43.3" y1="22.5" x2="52.7" y2="22.5" stroke="#7A7368" stroke-width="0.5" opacity="0.55"/>
+
+  <!-- Divider 2 (cobalt, back position) - moved to y=24 -->
+  <line x1="40.4" y1="24" x2="55.6" y2="24" stroke="#2D6A8C" stroke-width="1.8"/>
+
+  <!-- Tab 2 (cobalt) - RIGHT end of divider 2 -->
+  <rect x="51.6" y="20" width="4" height="4" rx="0.4"
+        fill="#2D6A8C" stroke="#1F1B16" stroke-width="0.9"/>
+
+  <!-- Comic top edges, MIDDLE section (between dividers) -->
+  <line x1="40"   y1="26"   x2="56"   y2="26"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="39.5" y1="28"   x2="56.5" y2="28"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="39"   y1="30"   x2="57"   y2="30"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="38.5" y1="32"   x2="57.5" y2="32"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="38"   y1="34"   x2="58"   y2="34"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="37.4" y1="36"   x2="58.6" y2="36"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="36.8" y1="38"   x2="59.2" y2="38"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="36.2" y1="40"   x2="59.8" y2="40"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="35.6" y1="42"   x2="60.4" y2="42"   stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+
+  <!-- Divider 1 (burnt orange, front position) -->
+  <line x1="34.7" y1="44" x2="61.3" y2="44" stroke="#B8602C" stroke-width="2"/>
+
+  <!-- Tab 1 (burnt orange) - LEFT end of divider 1 -->
+  <rect x="34.7" y="39" width="5" height="5" rx="0.4"
+        fill="#B8602C" stroke="#1F1B16" stroke-width="1.1"/>
+
+  <!-- Comic top edges, FRONT section (between divider 1 and front rim) -->
+  <line x1="34.2" y1="45.7" x2="61.8" y2="45.7" stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="33.8" y1="47.4" x2="62.2" y2="47.4" stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="33.4" y1="49.1" x2="62.6" y2="49.1" stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+  <line x1="33.1" y1="50.8" x2="62.9" y2="50.8" stroke="#7A7368" stroke-width="0.5" opacity="0.5"/>
+
+  <!-- Near end cap (front face, cardboard) - taller than wide -->
+  <rect x="33" y="52" width="30" height="36" rx="1.5"
+        fill="#FAF5E9" stroke="#1F1B16" stroke-width="2"/>
+
+  <!-- Handle cutout: wide oblong slot -->
+  <rect x="38" y="62" width="20" height="6" rx="3" fill="#1F1B16"/>
+
+  <!-- Subtle score line below handle (cardboard panel break) -->
+  <line x1="37" y1="80" x2="59" y2="80" stroke="#1F1B16" stroke-width="0.5" opacity="0.18"/>
+
+</svg>

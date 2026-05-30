@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% from "_wiki_card.html" import wiki_card %}
+{% from "_cv_badge.html" import cv_badge %}
+{% from "_publisher_arc_card.html" import list_row, gallery_card %}
+{% from "_pagination.html" import view_toggle %}
+{% from "_hydration_toast.html" import hydration_toast %}
+{% block title %}{{ detail.name }} &middot; Longboxes{% endblock %}
+
+{% block body %}
+{% include "_header.html" %}
+
+{# Publisher page is intentionally focused — identity card + library
+   CTA + paginated story-arc index. No list of "this publisher's
+   volumes" because at Marvel / DC scale that'd be thousands of
+   cards, almost all of which the user doesn't own. The library CTA
+   is scoped to their actual files; the story-arcs section is
+   bounded by what CV bundles in the publisher payload (typically
+   under ~100 stubs) and paginated 30 at a time. #}
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-6">
+  <nav class="text-xs text-slate-500">
+    <a href="/library" class="hover:underline">← Library</a>
+  </nav>
+
+  <section class="relative bg-white border border-slate-200 rounded-lg p-6">
+    <div class="absolute top-3 right-3 z-10">
+      {{ cv_badge(detail.site_detail_url) }}
+    </div>
+    <div class="flex items-start gap-6">
+      <div class="w-24 h-24 shrink-0 bg-slate-100 rounded border border-slate-200 flex items-center justify-center overflow-hidden">
+        {% if detail.icon_url %}
+          <img src="{{ detail.icon_url }}" alt="{{ detail.name }} logo"
+               class="w-full h-full object-contain">
+        {% else %}
+          <span class="text-xs text-slate-400">no logo</span>
+        {% endif %}
+      </div>
+      <div class="flex-1 min-w-0 space-y-3">
+        <h1 class="text-2xl font-semibold tracking-tight">{{ detail.name }}</h1>
+        <a href="/library?publisher={{ detail.publisher.cv_id }}"
+           class="inline-flex items-center gap-2 rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 transition-colors">
+          <span>
+            {% if detail.library_volume_count == 1 %}
+              Browse 1 volume in your library
+            {% else %}
+              Browse {{ detail.library_volume_count }} volumes in your library
+            {% endif %}
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        {% if detail.deck %}
+          {# CV's ``deck`` field — short one-liner sitting under the
+             library CTA. The long-form wiki description renders in
+             the card below. #}
+          <div class="text-sm italic text-slate-500 max-w-xl">{{ detail.deck }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {{ wiki_card(detail.description) }}
+
+  {# ---- Story arcs (paginated) ---- #}
+  {# Infinite scroll mirrors /library's pattern: server renders the
+     first ``page_size`` arcs; Alpine appends additional pages from
+     ``/publisher/{id}/arcs/fragment`` when the sentinel scrolls into
+     view (or the user clicks "Load more"). The fragment endpoint
+     also enqueues background hydration for any arc in the window
+     that doesn't yet have a CvStoryArc row — so covers gradually
+     populate on subsequent refreshes without ever blocking the
+     page on synchronous CV calls. #}
+  {% if detail.arcs or q %}
+    <section id="arcs"
+             x-data="{
+      ...setupAutoRefresh({ endpoint: '/publisher/{{ detail.publisher.cv_id }}/arcs/hydration' }),
+      view: 'list',
+      loadedTotal: {{ detail.arcs|length }},
+      total: {{ detail.arcs_total }},
+      loading: false,
+      hasMore: {{ 'true' if detail.arcs|length < detail.arcs_total else 'false' }},
+      {# Forwarded as ``&q=`` on fragment requests so pagination on
+         a filtered list keeps paging through the same filtered set.
+         ``tojson | forceescape`` produces a JS string literal whose
+         inner ``"`` characters become ``&quot;`` so they don't
+         terminate the surrounding x-data attribute. #}
+      q: {{ q | tojson | forceescape }},
+      async loadMore() {
+        if (this.loading || !this.hasMore) return;
+        this.loading = true;
+        try {
+          const params = new URLSearchParams({
+            view: this.view,
+            offset: this.loadedTotal,
+          });
+          if (this.q) params.set('q', this.q);
+          const res = await fetch(`/publisher/{{ detail.publisher.cv_id }}/arcs/fragment?${params}`);
+          if (!res.ok) { this.hasMore = false; return; }
+          const trimmed = (await res.text()).trim();
+          if (!trimmed) { this.hasMore = false; return; }
+          const target = this.view === 'list'
+            ? document.getElementById('arcs-tbody')
+            : document.getElementById('arcs-grid');
+          if (target) target.insertAdjacentHTML('beforeend', trimmed);
+          const tmp = document.createElement('div');
+          tmp.innerHTML = trimmed;
+          const added = tmp.children.length;
+          this.loadedTotal += added;
+          if (added === 0 || this.loadedTotal >= this.total) {
+            this.hasMore = false;
+          }
+          /* Newly loaded batch may have unhydrated rows — pick them
+             up before they're missed by the polling loop. */
+          this.scanPending();
+        } catch (e) {
+          this.hasMore = false;
+        } finally {
+          this.loading = false;
+        }
+      },
+      init() {
+        this.scanPending();
+        if ('IntersectionObserver' in window) {
+          const sentinel = this.$refs.sentinel;
+          if (sentinel) {
+            const obs = new IntersectionObserver((entries) => {
+              if (entries[0].isIntersecting) this.loadMore();
+            }, { rootMargin: '300px' });
+            obs.observe(sentinel);
+          }
+        }
+      }
+    }">
+      <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div class="flex items-baseline gap-3">
+          <h2 class="text-lg font-medium">Story arcs</h2>
+          <span class="text-xs text-slate-500"
+                x-text="hasMore
+                  ? `Showing ${loadedTotal} of ${total}`
+                  : `${total} arc${total === 1 ? '' : 's'}`"></span>
+        </div>
+        {{ view_toggle([
+          {"key": "list",    "label": "List"},
+          {"key": "gallery", "label": "Gallery"},
+        ]) }}
+      </div>
+
+      {# Name filter — case-insensitive substring match across each
+         arc's parsed name + parent book. Works against arc stubs,
+         so the filter sees every arc in the publisher's CV payload
+         even if many aren't individually hydrated yet. GET form
+         keeps the URL bookmarkable; pagination forwards ``q`` so
+         "Load more" walks the filtered set, not the full one. #}
+      <form method="get" action="/publisher/{{ detail.publisher.cv_id }}"
+            class="mb-3 flex items-center gap-2">
+        <label class="flex-1 relative">
+          <span class="sr-only">Filter arcs by name</span>
+          <input type="search" name="q" value="{{ q }}"
+                 placeholder="Filter arcs by name…"
+                 class="w-full text-sm bg-white border border-slate-200 rounded-md px-3 py-1.5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300">
+        </label>
+        <button type="submit"
+                class="text-xs text-slate-600 hover:text-slate-900 border border-slate-200 rounded-md px-3 py-1.5 bg-white hover:bg-slate-50">
+          Filter
+        </button>
+        {% if q %}
+          <a href="/publisher/{{ detail.publisher.cv_id }}"
+             class="text-xs text-slate-500 hover:text-slate-900 px-2 py-1.5">Clear</a>
+        {% endif %}
+      </form>
+
+      {% if q and not detail.arcs %}
+        {# Filter active but no matches — show an empty state inline
+           rather than a barren section. Clearing the filter brings
+           the full list back. #}
+        <div class="text-sm text-slate-500 bg-white border border-slate-200 rounded-lg p-6 text-center">
+          No arcs match
+          <span class="font-mono text-slate-700">&ldquo;{{ q }}&rdquo;</span>.
+          <a href="/publisher/{{ detail.publisher.cv_id }}"
+             class="text-slate-700 hover:underline">Clear filter</a>
+          to see all arcs.
+        </div>
+      {% endif %}
+
+      {% if detail.arcs %}
+        {# Both view containers hold the SERVER-rendered first page;
+           loadMore() appends additional batches via fragments fetched
+           from the right endpoint for the current view. Switching
+           view mid-scroll keeps already-loaded entries visible — the
+           alternate container is just hidden, not refetched. #}
+        <div x-show="view === 'list'">
+          <table class="w-full text-sm bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <thead class="text-left text-xs uppercase text-slate-500 bg-slate-50">
+              <tr>
+                <th class="py-2 px-3 w-14"></th>
+                <th class="py-2 px-3">Name</th>
+                <th class="py-2 px-3">Book</th>
+              </tr>
+            </thead>
+            <tbody id="arcs-tbody">
+              {% for a in detail.arcs %}{{ list_row(a) }}{% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div x-show="view === 'gallery'" x-cloak>
+          <ul id="arcs-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {% for a in detail.arcs %}{{ gallery_card(a) }}{% endfor %}
+          </ul>
+        </div>
+
+        <div x-show="hasMore" x-ref="sentinel" class="mt-6 flex justify-center">
+          <button type="button" @click="loadMore()"
+                  :disabled="loading"
+                  class="text-xs text-slate-600 hover:text-slate-900 border border-slate-200 rounded-md px-3 py-1.5 bg-white hover:bg-slate-50 disabled:opacity-50">
+            <span x-show="!loading">↓ Load more</span>
+            <span x-show="loading">Loading…</span>
+          </button>
+        </div>
+        <div x-show="!hasMore && total > {{ page_size }}" x-cloak class="mt-6 text-center text-xs text-slate-400">
+          End of arcs
+        </div>
+      {% endif %}
+
+      {# Live countdown toast — fixed bottom-right, shows while
+         arc-stub hydration is draining. Each pending entry is one
+         ``/story_arc/<id>/`` fetch filling in cover + description
+         + member-issue list on a previously-stub arc row. #}
+      {{ hydration_toast(label='arc') }}
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

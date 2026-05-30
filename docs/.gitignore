@@ -1,0 +1,21 @@
+# Astro build output
+dist/
+
+# Astro internal cache
+.astro/
+
+# npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Env (in case any deploy keys land here later)
+.env
+.env.production

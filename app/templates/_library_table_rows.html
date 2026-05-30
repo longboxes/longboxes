@@ -1,0 +1,5 @@
+{# Inner-only render of table rows for /library/fragment. The Alpine
+   infinite-scroll handler appends this response's HTML to the end
+   of the <tbody>. Empty response = end of results. #}
+{% from "_library_card.html" import library_table_row %}
+{% for r in rows %}{{ library_table_row(r) }}{% endfor %}

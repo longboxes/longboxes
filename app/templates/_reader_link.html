@@ -1,0 +1,25 @@
+{# Stretched overlay link that turns a file-cover thumbnail into a
+   click target opening the comic reader.
+
+   Drop ``reader_link(file_id)`` inside a file-cover thumbnail box; the
+   box must be ``relative`` so the anchor can stretch over it via
+   ``absolute inset-0``. It opens in a new tab so a reviewer can peek at
+   a file without losing their place in the review flow, and a faint
+   hover tint signals the thumbnail is interactive. Renders nothing when
+   ``file_id`` is falsy, so it is safe to call unconditionally.
+
+   ``?preview=1`` — this macro is used exclusively on review surfaces
+   (see review_*.html). Review is sampling, not reading, so the reader
+   suppresses progress tracking and the resume-from-saved jump when
+   the flag is set. Keeps an admin's "Continue reading" shelf clean
+   while they triage matches.
+
+   ``title`` is the hover tooltip — pass a filename where the thumbnail
+   carries no other label (e.g. the review-queue thumb strip). #}
+{% macro reader_link(file_id, title="Open in reader") %}
+  {%- if file_id -%}
+    <a href="/read/{{ file_id }}?preview=1" target="_blank" rel="noopener"
+       class="absolute inset-0 z-10 transition-colors hover:bg-slate-900/10"
+       aria-label="Open file in reader" title="{{ title }}"></a>
+  {%- endif -%}
+{% endmacro %}

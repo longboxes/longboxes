@@ -1,0 +1,21 @@
+{# Tab bar for a tabbed entity page — a row of <button> tabs wired to
+   an Alpine ``setupTabs`` scope (see app/static/entity-tabs.js).
+
+   Render it inside an ``x-data="setupTabs([...])"`` element; the tab
+   panels are siblings — ``<div x-show="tab === '<id>'">``. ``tabs`` is
+   a list of (id, label) pairs; ``aria_label`` names the tablist for
+   assistive tech. #}
+{% macro tab_bar(tabs, aria_label) %}
+  <nav class="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto"
+       role="tablist" aria-label="{{ aria_label }}">
+    {% for tab_id, tab_label in tabs %}
+      <button type="button" role="tab"
+              @click="select('{{ tab_id }}')"
+              :aria-selected="tab === '{{ tab_id }}'"
+              :class="tab === '{{ tab_id }}' ? 'border-slate-900 text-slate-900 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'"
+              class="shrink-0 px-3 py-2 text-sm border-b-2 -mb-px transition-colors">
+        {{ tab_label }}
+      </button>
+    {% endfor %}
+  </nav>
+{% endmacro %}

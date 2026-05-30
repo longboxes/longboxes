@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+{% from "_library_card.html" import library_grid_card, library_table_row %}
+{% from "_hydration_toast.html" import hydration_toast %}
+{% block title %}Library &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+{# Builds a library query string that preserves all CURRENT filters
+   *except* the one named in ``excluded`` — used by the alphabet
+   bar (excludes ``letter`` so each letter link can substitute its
+   own) and the active-filter chips below the alphabet bar (each
+   chip's X link excludes that chip's filter so clicking it drops
+   only that one filter). ``view`` and ``sort`` always survive
+   because they're not "filters" in the user's mental model — they
+   set how the same set of results is displayed. #}
+{% macro qs_excluding(excluded) -%}
+view={{ view }}&sort={{ sort }}
+{%- if excluded != 'publisher' and selected_publisher_id %}&publisher={{ selected_publisher_id }}{% endif -%}
+{%- if excluded != 'year' and selected_year %}&year={{ selected_year }}{% endif -%}
+{%- if excluded != 'missing_only' and missing_only %}&missing_only=true{% endif -%}
+{%- if excluded != 'format' and selected_format %}&format={{ selected_format }}{% endif -%}
+{%- if excluded != 'letter' and letter %}&letter={{ letter | urlencode }}{% endif -%}
+{%- if excluded != 'q' and q %}&q={{ q | urlencode }}{% endif -%}
+{%- endmacro %}
+
+{# Alphabet bar still wants the "no letter" form. #}
+{% set base_qs = qs_excluding('letter') %}
+
+{# Display labels for the classified-format facet, keyed by the value
+   stored in ``selected_format`` / submitted by the Type select. #}
+{% set format_labels = {
+     "ongoing": "Series", "limited": "Limited",
+     "one_shot": "One-shot", "collection": "Collection",
+   } %}
+
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-semibold tracking-tight">Library</h1>
+    {# The Grid/Table toggle lives in the header row, not the filter
+       card: switching view is a display choice, not a content
+       filter, and it has to stay reachable when the filter card is
+       collapsed on mobile. Riding in the existing header row, it
+       costs no extra vertical space. #}
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-slate-600">
+        {# ``total`` is the unpaginated count under current filters;
+           updates server-side on each /library load. The infinite-
+           scroll handler doesn't refresh this — minor cosmetic
+           inconsistency in the very rare case where new volumes
+           show up between page loads. #}
+        {{ total }} volume{{ "s" if total != 1 else "" }}
+      </span>
+      <div class="flex items-center gap-1.5">
+        <a href="/library?{{ base_qs|replace("view=" ~ view, "view=grid") }}{% if letter %}&letter={{ letter }}{% endif %}"
+           class="rounded-md border border-slate-300 px-3 py-1 text-sm {% if view == 'grid' %}bg-slate-100{% else %}hover:bg-slate-100{% endif %}">Grid</a>
+        <a href="/library?{{ base_qs|replace("view=" ~ view, "view=table") }}{% if letter %}&letter={{ letter }}{% endif %}"
+           class="rounded-md border border-slate-300 px-3 py-1 text-sm {% if view == 'table' %}bg-slate-100{% else %}hover:bg-slate-100{% endif %}">Table</a>
+      </div>
+    </div>
+  </div>
+
+  {# Filter + sort card. Collapsed by default on mobile behind a
+     toggle; always open on sm+ screens. The form's static
+     ``hidden sm:flex`` is the default/closed state (correct before
+     Alpine inits — no flash); the ``:class`` object only flips the
+     mobile ``hidden``/``flex`` when the toggle is used, and the
+     toggle button itself is ``sm:hidden``. #}
+  <div x-data="{ open: false }"
+       class="bg-white border border-slate-200 rounded-lg p-4">
+    <button type="button" @click="open = !open"
+            class="sm:hidden flex w-full items-center justify-between text-sm font-medium text-slate-700">
+      <span>Filters &amp; sort</span>
+      <svg xmlns="http://www.w3.org/2000/svg"
+           class="w-4 h-4 text-slate-500 transition-transform"
+           :class="open ? 'rotate-180' : ''"
+           fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+  <form method="get" action="/library"
+        :class="{ 'hidden': !open, 'flex': open }"
+        class="hidden sm:flex flex-wrap items-end gap-3 text-sm mt-3 sm:mt-0">
+    <label class="flex flex-col">
+      <span class="text-xs text-slate-500 mb-1">Search</span>
+      {# Free-text substring search on volume name. Case-insensitive,
+         %query% match. Backend escapes LIKE wildcards so the user
+         can paste arbitrary punctuation without surprises. #}
+      <input type="search" name="q" placeholder="Name contains…" value="{{ q }}"
+             class="rounded-md border border-slate-300 px-2 py-1 text-sm w-48">
+    </label>
+    <label class="flex flex-col">
+      <span class="text-xs text-slate-500 mb-1">Publisher</span>
+      <select name="publisher" class="rounded-md border border-slate-300 px-2 py-1 text-sm">
+        <option value="">All</option>
+        {% for pid, pname, _picon in publishers %}
+          <option value="{{ pid }}" {% if selected_publisher_id == pid %}selected{% endif %}>{{ pname }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="flex flex-col">
+      <span class="text-xs text-slate-500 mb-1">Type</span>
+      {# Classified-format facet. Values match ``classify_volume_format``
+         output; local volumes have no format, so the facet shows only
+         ComicVine volumes. #}
+      <select name="format" class="rounded-md border border-slate-300 px-2 py-1 text-sm">
+        <option value="">All</option>
+        <option value="ongoing" {% if selected_format == "ongoing" %}selected{% endif %}>Series</option>
+        <option value="limited" {% if selected_format == "limited" %}selected{% endif %}>Limited</option>
+        <option value="one_shot" {% if selected_format == "one_shot" %}selected{% endif %}>One-shot</option>
+        <option value="collection" {% if selected_format == "collection" %}selected{% endif %}>Collection</option>
+      </select>
+    </label>
+    <label class="flex flex-col">
+      <span class="text-xs text-slate-500 mb-1">Active in</span>
+      {# Matches volumes that were publishing during the entered
+         year: started in or before, and have at least one issue
+         with a cover_date in or after that year. Without cover-date
+         data the predicate falls back to "started in this year". #}
+      <input type="number" name="year" placeholder="e.g. 2012" value="{{ selected_year or '' }}"
+             title="Volumes publishing during this year"
+             class="rounded-md border border-slate-300 px-2 py-1 text-sm w-24">
+    </label>
+    <label class="flex flex-col">
+      <span class="text-xs text-slate-500 mb-1">Sort</span>
+      <select name="sort" class="rounded-md border border-slate-300 px-2 py-1 text-sm">
+        <option value="name" {% if sort == "name" %}selected{% endif %}>Name</option>
+        <option value="year" {% if sort == "year" %}selected{% endif %}>Year (newest)</option>
+        <option value="owned" {% if sort == "owned" %}selected{% endif %}>Most owned</option>
+        <option value="missing" {% if sort == "missing" %}selected{% endif %}>Most missing</option>
+      </select>
+    </label>
+    <label class="flex items-center gap-2 mb-1">
+      <input type="checkbox" name="missing_only" value="true" {% if missing_only %}checked{% endif %}>
+      <span class="text-sm">Has missing issues</span>
+    </label>
+    {# Preserve the active letter through form submits — the alphabet
+       bar below provides the UI to change it. Submitting the filter
+       form shouldn't drop the user's current letter context. #}
+    {% if letter %}<input type="hidden" name="letter" value="{{ letter }}">{% endif %}
+    <input type="hidden" name="view" value="{{ view }}">
+    <button type="submit" class="rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-1 hover:bg-slate-800">Apply</button>
+  </form>
+  </div>
+
+  {# Alphabet jump bar — styled as longbox tab dividers, a light
+     skeuomorphic nod to the app's namesake. The active letter is
+     raised + white (pulled forward like a flipped-up divider); the
+     rest sit back, muted. On sm+ screens the 28 tabs span the full
+     content width in one row on a hairline rail; on mobile they
+     wrap to three rows so the touch targets stay tappable.
+     Each link reissues the page with the new ``letter`` query
+     param while preserving the other filters; "All" omits
+     ``letter``, "#" matches a non-letter first char.
+
+     EXPERIMENT: this tab-divider treatment is a trial. To revert,
+     restore the plain rounded-chip ``<nav>`` (a wrapping flex row
+     of ``w-7 h-7`` bordered chips). #}
+  {% set tab_base = "text-center text-xs rounded-t-md border sm:border-b-0 transition-colors select-none" %}
+  {% set tab_active = "bg-white text-slate-900 font-semibold border-slate-300 shadow-sm relative z-10 py-3" %}
+  {% set tab_idle = "bg-slate-100 text-slate-400 font-medium border-slate-200 hover:bg-slate-50 hover:text-slate-600 py-2" %}
+  {# Grid (not flex): 10 columns on mobile → three rows for the 28
+     tabs (10 / 10 / 8); 28 columns on sm+ → one row. ``items-end``
+     lets the taller active tab rise within its row. The rail +
+     merged bottom border are sm-only — on mobile each tab is
+     fully bordered and self-contained. #}
+  <nav class="grid grid-cols-[repeat(10,minmax(0,1fr))] sm:grid-cols-[repeat(28,minmax(0,1fr))] items-end gap-x-px gap-y-2 sm:border-b sm:border-slate-200"
+       aria-label="Jump to volumes by first letter">
+    <a href="/library?{{ base_qs }}"
+       class="{{ tab_base }} {{ tab_active if not letter else tab_idle }}">All</a>
+    {% for L in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" %}
+      <a href="/library?{{ base_qs }}&letter={{ L }}"
+         class="{{ tab_base }} {{ tab_active if letter == L else tab_idle }}">{{ L }}</a>
+    {% endfor %}
+    <a href="/library?{{ base_qs }}&letter=%23"
+       class="{{ tab_base }} {{ tab_active if letter == '#' else tab_idle }}"
+       title="Volumes starting with a number or symbol">#</a>
+  </nav>
+
+  {# Active filters bar — one chip per non-default filter, each with
+     an X that drops just that filter. Trailing "Clear all" link
+     drops every filter but preserves view + sort (the user's
+     display preference shouldn't reset along with their content
+     filters). Hidden entirely when nothing is filtered. #}
+  {% set has_any_filter = q or selected_publisher_id or selected_year or missing_only or letter or selected_format %}
+  {% if has_any_filter %}
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <span class="text-slate-500 font-medium">Filtering by:</span>
+
+      {% if q %}
+        <a href="/library?{{ qs_excluding('q') }}"
+           class="group inline-flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 px-2.5 py-1 transition-colors"
+           title='Remove search "{{ q }}"'>
+          <span class="text-slate-500">Search:</span>
+          <span class="font-medium text-slate-800">{{ q }}</span>
+          <span class="text-slate-400 group-hover:text-slate-700 leading-none text-sm">×</span>
+        </a>
+      {% endif %}
+
+      {% if selected_publisher_id and selected_publisher_name %}
+        <a href="/library?{{ qs_excluding('publisher') }}"
+           class="group inline-flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 pl-1 pr-2.5 py-0.5 transition-colors"
+           title="Remove publisher filter">
+          {% if selected_publisher_icon %}
+            <img src="{{ selected_publisher_icon }}" alt=""
+                 class="w-5 h-5 rounded-sm object-contain bg-white">
+          {% endif %}
+          <span class="font-medium text-slate-800">{{ selected_publisher_name }}</span>
+          <span class="text-slate-400 group-hover:text-slate-700 leading-none text-sm">×</span>
+        </a>
+      {% endif %}
+
+      {% if selected_format %}
+        <a href="/library?{{ qs_excluding('format') }}"
+           class="group inline-flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 px-2.5 py-1 transition-colors"
+           title="Remove type filter">
+          <span class="text-slate-500">Type:</span>
+          <span class="font-medium text-slate-800">{{ format_labels.get(selected_format, selected_format) }}</span>
+          <span class="text-slate-400 group-hover:text-slate-700 leading-none text-sm">×</span>
+        </a>
+      {% endif %}
+
+      {% if selected_year %}
+        <a href="/library?{{ qs_excluding('year') }}"
+           class="group inline-flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 px-2.5 py-1 transition-colors"
+           title="Remove year filter">
+          <span class="text-slate-500">Active in:</span>
+          <span class="font-medium text-slate-800">{{ selected_year }}</span>
+          <span class="text-slate-400 group-hover:text-slate-700 leading-none text-sm">×</span>
+        </a>
+      {% endif %}
+
+      {% if missing_only %}
+        <a href="/library?{{ qs_excluding('missing_only') }}"
+           class="group inline-flex items-center gap-1.5 rounded-full bg-amber-50 hover:bg-amber-100 px-2.5 py-1 transition-colors text-amber-800"
+           title="Show all volumes (not just ones with missing issues)">
+          <span class="font-medium">Has missing</span>
+          <span class="text-amber-400 group-hover:text-amber-700 leading-none text-sm">×</span>
+        </a>
+      {% endif %}
+
+      {% if letter %}
+        <a href="/library?{{ qs_excluding('letter') }}"
+           class="group inline-flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 px-2.5 py-1 transition-colors"
+           title="Remove letter filter">
+          <span class="text-slate-500">Starts with:</span>
+          <span class="font-medium text-slate-800">{{ letter }}</span>
+          <span class="text-slate-400 group-hover:text-slate-700 leading-none text-sm">×</span>
+        </a>
+      {% endif %}
+
+      {# Clear all preserves only view + sort — the user's display
+         preference, not a content filter. Lives at the end of the
+         chip row, separated visually by ``ml-auto`` so it doesn't
+         get mistaken for another chip on dense filter states. #}
+      <a href="/library?view={{ view }}&sort={{ sort }}"
+         class="ml-auto text-slate-500 hover:text-slate-900 underline">
+        Clear all
+      </a>
+    </div>
+  {% endif %}
+
+  {% if not rows %}
+    <section class="bg-white border border-slate-200 rounded-lg p-8 text-center text-sm text-slate-600">
+      {% if q %}
+        No volumes match <span class="font-medium">"{{ q }}"</span>{% if letter %} starting with <span class="font-medium">{{ letter }}</span>{% endif %}. Try a different search.
+      {% elif letter %}
+        No volumes starting with <span class="font-medium">{{ letter }}</span> match those filters. <a class="underline" href="/library?{{ base_qs }}">Clear the letter</a> or adjust filters.
+      {% else %}
+        No volumes match those filters. Try clearing the filters, or add more volumes from <a class="underline" href="/admin">/admin</a>.
+      {% endif %}
+    </section>
+  {% else %}
+    {# Infinite scroll: server delivers the first ``page_size`` items
+       above; Alpine fetches the next page from /library/fragment when
+       the sentinel <div> below scrolls into view, and appends the
+       returned HTML directly into the grid / tbody container.
+
+       ``loadedTotal`` tracks how many we have on the page so the
+       fragment offset is correct; ``hasMore`` short-circuits the
+       observer once we've fetched everything. The total comes from
+       server-side ``total`` (unpaginated count under filters). #}
+    <section x-data="{
+      ...setupAutoRefresh({ endpoint: '/library/hydration' }),
+      view: '{{ view }}',
+      loadedTotal: {{ rows|length }},
+      total: {{ total }},
+      loading: false,
+      hasMore: {{ 'true' if rows|length < total else 'false' }},
+      async loadMore() {
+        if (this.loading || !this.hasMore) return;
+        this.loading = true;
+        try {
+          const params = new URLSearchParams({
+            view: this.view,
+            offset: this.loadedTotal,
+            publisher: '{{ selected_publisher_id or '' }}',
+            year: '{{ selected_year or '' }}',
+            missing_only: '{{ 'true' if missing_only else 'false' }}',
+            sort: '{{ sort }}',
+            {% if letter %}letter: '{{ letter }}',{% endif %}
+            {# ``tojson`` returns a JSON-encoded string wrapped in
+               literal ``"..."``. Since the surrounding ``x-data``
+               attribute is also double-quoted, we have to HTML-escape
+               the inner quotes (``"`` → ``&quot;``) so the attribute
+               doesn't close prematurely. The HTML parser unescapes
+               them back to ``"`` when Alpine reads the attribute,
+               and Alpine sees valid JS again. #}
+            {% if q %}q: {{ q | tojson | forceescape }},{% endif %}
+            {# ``selected_format`` is one of four fixed tokens — safe to
+               inline without escaping. #}
+            {% if selected_format %}format: '{{ selected_format }}',{% endif %}
+          });
+          const res = await fetch(`/library/fragment?${params}`);
+          if (!res.ok) { this.hasMore = false; return; }
+          const html = await res.text();
+          const trimmed = html.trim();
+          if (!trimmed) { this.hasMore = false; return; }
+          const target = this.view === 'grid'
+            ? document.getElementById('library-grid')
+            : document.getElementById('library-tbody');
+          if (target) target.insertAdjacentHTML('beforeend', trimmed);
+          {# Count appended top-level elements to advance the offset.
+             Grid pages yield <li> children; table pages yield <tr>
+             children. Counting via a temp container is robust to
+             both shapes. #}
+          const tmp = document.createElement('div');
+          tmp.innerHTML = trimmed;
+          const added = tmp.children.length;
+          this.loadedTotal += added;
+          if (added === 0 || this.loadedTotal >= this.total) {
+            this.hasMore = false;
+          }
+          {# Newly-appended batch may include stub-volume cards;
+             let auto-refresh pick them up before the next poll. #}
+          this.scanPending();
+        } catch (e) {
+          this.hasMore = false;
+        } finally {
+          this.loading = false;
+        }
+      },
+      init() {
+        this.scanPending();
+        if (!('IntersectionObserver' in window)) {
+          {# Older browser → just expose a manual button (which the
+             template renders unconditionally below the sentinel). #}
+          return;
+        }
+        const sentinel = this.$refs.sentinel;
+        if (!sentinel) return;
+        const obs = new IntersectionObserver((entries) => {
+          if (entries[0].isIntersecting) this.loadMore();
+        }, { rootMargin: '300px' });
+        obs.observe(sentinel);
+      }
+    }">
+      {% if view == "grid" %}
+        <ul id="library-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {% for r in rows %}
+            {{ library_grid_card(r) }}
+          {% endfor %}
+        </ul>
+      {% else %}
+        <table class="w-full text-sm bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <thead class="text-left text-xs uppercase text-slate-500 bg-slate-50">
+            <tr>
+              <th class="py-2 px-3">Name</th>
+              <th class="py-2 px-3">Year</th>
+              <th class="py-2 px-3">Publisher</th>
+              <th class="py-2 px-3">Type</th>
+              <th class="py-2 px-3 text-right">Owned</th>
+              <th class="py-2 px-3 text-right">Read</th>
+              <th class="py-2 px-3 text-right">Total</th>
+              <th class="py-2 px-3 text-right">Missing</th>
+            </tr>
+          </thead>
+          <tbody id="library-tbody">
+            {% for r in rows %}
+              {{ library_table_row(r) }}
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+
+      {# Sentinel sits below the rendered items. When it scrolls into
+         the viewport (or within 300px), the observer fires loadMore().
+         Hidden once there's nothing left to fetch. #}
+      <div x-show="hasMore" x-ref="sentinel" class="mt-6 flex justify-center">
+        <button type="button" @click="loadMore()"
+                :disabled="loading"
+                class="text-xs text-slate-600 hover:text-slate-900 border border-slate-200 rounded-md px-3 py-1.5 bg-white hover:bg-slate-50 disabled:opacity-50">
+          <span x-show="!loading">↓ Load more</span>
+          <span x-show="loading">Loading…</span>
+        </button>
+      </div>
+      <div x-show="!hasMore" x-cloak class="mt-6 text-center text-xs text-slate-400">
+        End of library
+      </div>
+
+      {# Live countdown toast — fixed bottom-right, shows while
+         stub-volume hydration is draining. Each pending entry is
+         one ``/volume/<id>/`` fetch upgrading a thin stub row to
+         a full metadata + cover. #}
+      {{ hydration_toast(label='volume') }}
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

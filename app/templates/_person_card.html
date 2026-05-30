@@ -1,0 +1,28 @@
+{# A person card — a bordered, circular avatar followed by a name, in
+   a row-style card linking to ``href``.
+
+   Shared by the character page's Creators / Friends / Enemies / Teams
+   tabs, the team page's Members, and the creator page's Created
+   characters / Story arcs tabs. ``icon_url`` is CV's small square
+   ``icon`` image; when absent the avatar falls back to the name's
+   initials. ``badge`` is an optional small pill shown above the name
+   — the parsed ``"<book>"`` prefix on a story-arc card. #}
+{% macro person_card(href, name, icon_url=none, badge=none) %}
+  <a href="{{ href }}"
+     class="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
+    {% if icon_url %}
+      <img src="{{ icon_url }}" alt="" loading="lazy"
+           class="w-10 h-10 shrink-0 rounded-full object-cover border border-slate-200 bg-slate-100">
+    {% else %}
+      <span class="w-10 h-10 shrink-0 rounded-full border border-slate-200 bg-slate-100 text-slate-500 flex items-center justify-center text-sm font-semibold">
+        {{ (name.split() | map('first') | join)[:2] | upper or "?" }}
+      </span>
+    {% endif %}
+    <span class="min-w-0 flex-1">
+      {% if badge %}
+        <span class="inline-block max-w-full truncate align-bottom rounded bg-slate-100 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 mb-0.5">{{ badge }}</span>
+      {% endif %}
+      <span class="block font-medium text-slate-900 truncate">{{ name }}</span>
+    </span>
+  </a>
+{% endmacro %}

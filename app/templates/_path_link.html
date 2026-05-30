@@ -1,0 +1,94 @@
+{# Render a filesystem path with both a ``file://`` anchor and a
+   "Copy" button.
+
+   ``path_link(path)`` emits:
+     - The path as an ``<a href="file://...">`` link. Caveat: most
+       modern browsers (Chrome, Safari) block ``file://`` navigation
+       from an ``http://`` page for security; Firefox sometimes
+       works after an about:config tweak. So the anchor is
+       best-effort — useful when it works, harmless otherwise.
+     - A "Copy" button that copies the raw path to the clipboard.
+       That always works, and the operator can paste into Finder's
+       Go → Folder (⌘⇧G) or Explorer's address bar.
+
+   The button has a transient "Copied!" state for 1.5s after a
+   successful copy, so the operator gets a visible confirmation
+   without a separate toast layer.
+
+   Caveat: ``path`` is the server-side path stored in the DB. In a
+   Docker bind-mount setup, that may not match the host-side path
+   the browser/Finder needs. The copy gives the operator something
+   to paste and edit; the link gives a best-effort direct open.
+
+   Call ``path_link_script()`` ONCE per page (typically near the end
+   of the body) to inject the small clipboard handler. Idempotent —
+   guards against multiple includes via a window flag. #}
+{% macro path_link(path) %}
+  {%- if path -%}
+    <span class="inline-flex items-baseline gap-1.5 max-w-full">
+      {# ``rel="noopener"`` is conservative even on file:// — some
+         browsers still treat the new tab as a real navigation
+         context. ``onclick`` returns true to let the browser try
+         to follow the link; if it blocks, the copy button is right
+         there as a fallback. #}
+      <a href="file://{{ path }}"
+         target="_blank" rel="noopener"
+         class="font-mono break-all hover:underline"
+         title="Open in your file manager (some browsers block file:// links — use Copy as a fallback)"
+         >{{ path }}</a>
+      <button type="button"
+              data-copy-path="{{ path }}"
+              class="shrink-0 rounded-md border border-slate-300 bg-white text-slate-600 text-xs font-medium px-2 py-0.5 hover:bg-slate-100"
+              title="Copy path to clipboard"
+              >Copy</button>
+    </span>
+  {%- endif -%}
+{% endmacro %}
+
+
+{# Inject the clipboard handler. Bind a single delegated click
+   listener so the macro can be used N times on a page without
+   N event handlers. ``__pathCopyBound`` guards against multiple
+   inclusions (two pages might both call this macro). #}
+{% macro path_link_script() %}
+<script>
+  (function () {
+    if (window.__pathCopyBound) return;
+    window.__pathCopyBound = true;
+    document.addEventListener("click", function (ev) {
+      const btn = ev.target.closest("[data-copy-path]");
+      if (!btn) return;
+      ev.preventDefault();
+      const path = btn.getAttribute("data-copy-path");
+      const original = btn.textContent;
+      const ok = function () {
+        btn.textContent = "Copied!";
+        btn.classList.add("bg-emerald-50", "text-emerald-700", "border-emerald-300");
+        setTimeout(function () {
+          btn.textContent = original;
+          btn.classList.remove("bg-emerald-50", "text-emerald-700", "border-emerald-300");
+        }, 1500);
+      };
+      const fail = function () {
+        btn.textContent = "Copy failed";
+        setTimeout(function () { btn.textContent = original; }, 1500);
+      };
+      // Prefer the async Clipboard API; fall back to the older
+      // execCommand path for HTTP contexts (Clipboard API needs
+      // a secure context or localhost).
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(path).then(ok, fail);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = path;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); ok(); } catch (e) { fail(); }
+        document.body.removeChild(ta);
+      }
+    });
+  })();
+</script>
+{% endmacro %}

@@ -1,0 +1,44 @@
+{% extends "_centered_card.html" %}
+{% block title %}Set up Longboxes{% endblock %}
+{% block subhead %}First-run setup &mdash; create the admin account.{% endblock %}
+{% block card %}
+<form method="post" action="/setup" class="space-y-4">
+  {% if error %}
+    <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">
+      {{ error }}
+    </div>
+  {% endif %}
+  <div>
+    <label for="username" class="block text-sm font-medium text-slate-700">Username</label>
+    <input
+      id="username" name="username" type="text" required autofocus autocomplete="username"
+      value="{{ username or '' }}"
+      class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+             focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+  </div>
+  <div>
+    <label for="password" class="block text-sm font-medium text-slate-700">Password</label>
+    <input
+      id="password" name="password" type="password" required minlength="8"
+      autocomplete="new-password"
+      class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+             focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+    <p class="text-xs text-slate-500 mt-1">At least 8 characters.</p>
+  </div>
+  <div>
+    <label for="password_confirm" class="block text-sm font-medium text-slate-700">Confirm password</label>
+    <input
+      id="password_confirm" name="password_confirm" type="password" required minlength="8"
+      autocomplete="new-password"
+      class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+             focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+  </div>
+  <button
+    type="submit"
+    class="w-full rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2
+           hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500
+           focus:ring-offset-2">
+    Create admin account
+  </button>
+</form>
+{% endblock %}

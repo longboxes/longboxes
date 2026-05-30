@@ -1,0 +1,17 @@
+{# Shared shell for the auth pages (setup, login). Keeps both forms looking
+   identical without duplicating layout markup. #}
+{% extends "base.html" %}
+{% block body %}
+<main class="min-h-screen flex items-center justify-center px-4 py-12">
+  <div class="w-full max-w-sm">
+    <header class="mb-8 text-center">
+      <h1 class="text-2xl font-semibold tracking-tight">Longboxes</h1>
+      <p class="text-sm text-slate-500 mt-1">{% block subhead %}{% endblock %}</p>
+    </header>
+    <div class="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+      {% block card %}{% endblock %}
+    </div>
+    {% block postcard %}{% endblock %}
+  </div>
+</main>
+{% endblock %}

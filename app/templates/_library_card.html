@@ -1,0 +1,114 @@
+{% from "_decorations.html" import corner_flag %}
+{% from "_format_macros.html" import format_badge %}
+{# Single library volume rendering, shared between:
+
+   * the initial /library page render (looped in library.html),
+   * the /library/fragment endpoint that appends additional pages
+     during infinite scroll.
+
+   Two macros:
+
+   * ``library_grid_card(r)`` — full grid card (cover thumbnail with
+     a hover overlay carrying the owned/total + missing detail,
+     progress bar under the cover, name + year/publisher caption).
+   * ``library_table_row(r)`` — single table row with the same data
+     in tabular form.
+
+   Both are intentionally self-contained so the fragment endpoint
+   can render them without including the broader page layout. #}
+{% macro library_grid_card(r) %}
+  {# ``id`` + ``data-pending-id`` + ``data-hydrated`` let the
+     auto-refresh helper find and swap stub-volume cards in place
+     once a background ``revalidate("volume", id)`` job drains.
+     ``r.is_stub`` covers the "FK-only placeholder, no metadata"
+     case the matcher creates before a /volume/X/ fetch lands.
+     ``r.dom_key`` / ``r.detail_url`` branch CV vs local (Phase 11C):
+     a local row is never a stub, so it's always ``data-hydrated``
+     true and the auto-refresh helper ignores it — ``dom_key`` just
+     keeps two local cards from colliding on ``grid-volume-0``. #}
+  <li id="grid-volume-{{ r.dom_key }}"
+      data-pending-id="{{ r.dom_key }}"
+      data-hydrated="{{ 'false' if r.is_stub else 'true' }}"
+      class="min-w-0">
+    <a href="{{ r.detail_url }}" class="block group">
+      <div class="relative w-full bg-slate-100 rounded-md overflow-hidden border border-slate-200" style="aspect-ratio: 2 / 3;">
+        {% if r.cover_url %}
+          <img src="{{ r.cover_url }}" alt="{{ r.name }} cover" loading="lazy" class="absolute inset-0 w-full h-full object-cover transition-opacity group-hover:opacity-80">
+        {% else %}
+          <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">
+            {% if r.is_stub %}refreshing…{% else %}no cover{% endif %}
+          </div>
+        {% endif %}
+        {# Hover overlay: full-cover dark fill + the owned/total/
+           missing detail. ``pointer-events-none`` lets clicks pass
+           through to the anchor. #}
+        <div class="absolute inset-0 bg-slate-900/75 text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none flex flex-col items-center justify-center text-center px-3 gap-0.5">
+          <div class="text-base font-bold leading-tight tabular-nums">
+            {{ r.owned_count }}{% if r.count_of_issues %} / {{ r.count_of_issues }}{% endif %}
+          </div>
+          <div class="text-[10px] uppercase tracking-wide opacity-80">
+            {% if r.count_of_issues %}issues owned{% else %}owned{% endif %}
+          </div>
+          {% if r.has_missing %}
+            <div class="text-xs text-amber-200 mt-1">{{ r.missing_count }} missing</div>
+          {% endif %}
+        </div>
+        {# Corner flag — green for a ComicVine volume, gray for a
+           hand-catalogued local volume (Phase 11). Rendered last so it
+           sits above the hover overlay and stays visible on hover. #}
+        {% if r.kind == "local" %}
+          {{ corner_flag("border-t-slate-400", "Local volume") }}
+        {% else %}
+          {{ corner_flag("border-t-emerald-500", "ComicVine volume") }}
+        {% endif %}
+      </div>
+      {# Progress bar — a layered owned + read indicator. The track is
+         the volume's issue total (or, with no CV total, the owned
+         count); the light segment is the owned proportion and the
+         darker emerald segment the issues read — read ⊆ owned ⊆ total.
+         Skipped only when there's no denominator at all. #}
+      {% set denom = r.count_of_issues if r.count_of_issues else r.owned_count %}
+      {% if denom and denom > 0 %}
+        {% set owned_pct = [r.owned_count / denom * 100, 100] | min %}
+        {% set read_pct = [r.read_count / denom * 100, 100] | min %}
+        <div class="relative mt-1.5 w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div class="absolute inset-y-0 left-0 bg-emerald-200"
+               style="width: {{ owned_pct | round(1) }}%;"></div>
+          {% if r.read_count %}
+            <div class="absolute inset-y-0 left-0 bg-emerald-500"
+                 style="width: {{ read_pct | round(1) }}%;"></div>
+          {% endif %}
+        </div>
+      {% endif %}
+      <div class="mt-2 text-sm">
+        <div class="font-medium text-slate-900 line-clamp-2">{{ r.name }}</div>
+        {# Format badge sits alongside year/publisher; it renders nothing
+           for a local volume or an un-classifiable stub, in which case
+           the line is just the year/publisher span. #}
+        <div class="text-slate-500 text-xs flex items-center gap-1.5 flex-wrap">
+          {{ format_badge(r.format) }}
+          <span>{{ r.year or "—" }}{% if r.publisher_name %} &middot; {{ r.publisher_name }}{% endif %}</span>
+        </div>
+      </div>
+    </a>
+  </li>
+{% endmacro %}
+
+{% macro library_table_row(r) %}
+  <tr id="table-volume-{{ r.dom_key }}"
+      data-pending-id="{{ r.dom_key }}"
+      data-hydrated="{{ 'false' if r.is_stub else 'true' }}"
+      class="border-t border-slate-100 hover:bg-slate-50">
+    <td class="py-1 px-3"><a class="text-slate-900 hover:underline" href="{{ r.detail_url }}">{{ r.name }}</a></td>
+    <td class="py-1 px-3 text-slate-500">{{ r.year or "—" }}</td>
+    <td class="py-1 px-3 text-slate-500">{{ r.publisher_name or "—" }}</td>
+    {# Type — the format badge, or a muted dash when there's nothing to
+       classify (a local volume, or an un-hydrated CV stub). #}
+    {% set type_badge = format_badge(r.format) %}
+    <td class="py-1 px-3">{% if type_badge.strip() %}{{ type_badge }}{% else %}<span class="text-slate-300">—</span>{% endif %}</td>
+    <td class="py-1 px-3 text-right">{{ r.owned_count }}</td>
+    <td class="py-1 px-3 text-right text-slate-500">{{ r.read_count or "—" }}</td>
+    <td class="py-1 px-3 text-right text-slate-500">{{ r.count_of_issues or "—" }}</td>
+    <td class="py-1 px-3 text-right {% if r.has_missing %}text-amber-700{% else %}text-slate-400{% endif %}">{{ r.missing_count if r.missing_count is not none else "—" }}</td>
+  </tr>
+{% endmacro %}

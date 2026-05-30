@@ -1,0 +1,46 @@
+{# Shared "search result" volume card.
+
+   Used by:
+   * review_volume_search.html — the matcher's volume picker
+     (group / file / fix-match modes). Each result was the
+     ``shape_volume_results`` dict (cv_id / name / year / publisher /
+     issue_count / cover_url / description / format).
+   * search.html — the /search and /search/comicvine pages, rendering
+     a SearchHit. SearchHit's optional rich-volume fields
+     (cv_id, year, publisher, format, issue_count, description)
+     match the dict shape above, so the same macro renders both.
+
+   ``volume_card_inner(v)`` renders the cover + name+year+popover +
+   format+publisher+count + CV-id line. Caller wraps the macro in
+   whatever outer element it needs (``<a>``, ``<button>`` inside a
+   POST form, or a ``<li><a>`` in the search grid). #}
+{% from "_format_macros.html" import format_badge, volume_info_popover %}
+
+{% macro volume_card_inner(v) %}
+  <div class="w-14 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+    {% if v.cover_url %}
+      <img src="{{ v.cover_url }}" alt="" loading="lazy"
+           class="w-full h-full object-cover">
+    {% endif %}
+  </div>
+  <div class="min-w-0">
+    <div class="font-medium text-slate-900">
+      {{ v.name }}
+      {% if v.year %}<span class="text-slate-400 font-normal">({{ v.year }})</span>{% endif %}
+      {% if v.description %}{{ volume_info_popover(v.description) }}{% endif %}
+    </div>
+    <div class="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+      {% if v.format %}{{ format_badge(v.format) }}{% endif %}
+      <span>
+        {% if v.publisher %}{{ v.publisher }}{% endif %}
+        {% if v.issue_count is not none %}
+          {% if v.publisher %}&middot;{% endif %}
+          {{ v.issue_count }} issue{{ "s" if v.issue_count != 1 else "" }}
+        {% endif %}
+      </span>
+    </div>
+    <div class="text-xs text-slate-400 mt-1">
+      CV volume <span class="font-mono">{{ v.cv_id }}</span>
+    </div>
+  </div>
+{% endmacro %}

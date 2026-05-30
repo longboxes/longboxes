@@ -1,0 +1,89 @@
+{% extends "_entity_page.html" %}
+{% from "_wiki_card.html" import wiki_about_block %}
+{% from "_entity_hero.html" import entity_hero %}
+{% from "_sidebar.html" import sidebar_nav_link %}
+{% from "_volume_credits.html" import volume_credits_list %}
+{% from "_character_people.html" import character_people %}
+{% from "_tabs.html" import tab_bar %}
+
+{# The /creator/{cv_id} page — a ComicVine creator (person). A
+   cover+text hero, the CV wiki "About" card, then a tabbed area:
+   Credited volumes (CV ``volume_credits``, with an alphabet filter),
+   Created characters, and Story arcs. ``detail`` is a ``CreatorDetail``
+   (see app/services/library.py). #}
+
+{% block title %}{{ detail.name }} &middot; Longboxes{% endblock %}
+
+{% block content %}
+  {% call(meta_class, subtle_class, is_banner) entity_hero(
+      title=detail.name,
+      cover_url=detail.cover_url,
+      cover_alt=detail.name ~ ' portrait',
+      cv_site_url=(detail.person.raw_payload or {}).get('site_detail_url'),
+      breadcrumbs=[{"label": "Library", "href": "/library"}],
+      deck=detail.deck,
+      deck_hide_mobile=true
+  ) %}
+    {% if detail.total %}
+      <div class="text-sm {{ meta_class }}">
+        <span class="font-medium">{{ detail.total }}</span>
+        credited volume{{ "s" if detail.total != 1 else "" }}
+      </div>
+    {% endif %}
+  {% endcall %}
+
+  {{ wiki_about_block(
+       detail.description,
+       breadcrumbs=[{"label": "Library", "href": "/library"}]
+  ) }}
+
+  {# Tabbed sections — see app/static/entity-tabs.js. The active tab is
+     mirrored to the URL hash so it survives the pagination reloads. #}
+  <div id="credits"
+       x-data="setupTabs(['volumes', 'characters', 'arcs'])">
+    {{ tab_bar([
+         ("volumes", "Credited volumes"),
+         ("characters", "Created characters"),
+         ("arcs", "Story arcs")], "Creator sections") }}
+
+    {# Credited volumes — the primary tab, deliberately NOT x-cloak'd
+       so it survives an Alpine load failure. #}
+    <div x-show="tab === 'volumes'" role="tabpanel" id="volumes">
+      {{ volume_credits_list(
+           detail.volume_credits, detail.total,
+           detail.page, detail.page_count, "page", "volumes",
+           "No credited volumes are recorded for this creator yet.",
+           letter=detail.letter, letter_param="letter",
+           filtered_count=detail.filtered_count,
+           credit_param="creator:" ~ detail.person.cv_id) }}
+    </div>
+
+    {# Created characters — cards link to /character/. #}
+    <div x-show="tab === 'characters'" x-cloak role="tabpanel" id="characters">
+      {{ character_people(
+           detail.created_characters, detail.created_characters_total,
+           detail.created_characters_page,
+           detail.created_characters_page_count,
+           "cpage", "characters", "character", "/character/",
+           letter=detail.created_characters_letter,
+           letter_param="cletter",
+           filtered_count=detail.created_characters_filtered_count) }}
+    </div>
+
+    {# Story arcs — cards link to /arc/. #}
+    <div x-show="tab === 'arcs'" x-cloak role="tabpanel" id="arcs">
+      {{ character_people(
+           detail.story_arcs, detail.story_arcs_total,
+           detail.story_arcs_page, detail.story_arcs_page_count,
+           "apage", "arcs", "story arc", "/arc/",
+           letter=detail.story_arcs_letter,
+           letter_param="aletter",
+           filtered_count=detail.story_arcs_filtered_count) }}
+    </div>
+  </div>
+{% endblock %}
+
+{% block sidebar_nav_links %}
+  {% if detail.description %}{{ sidebar_nav_link("#about", "About") }}{% endif %}
+  {{ sidebar_nav_link("#credits", "Credits") }}
+{% endblock %}

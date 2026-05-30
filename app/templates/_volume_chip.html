@@ -1,0 +1,38 @@
+{# Renders a volume as a clickable cover thumbnail with name (+ year)
+   in the alt/hover text.
+
+   Takes a ``CvVolume`` ORM object (or None — renders nothing). Cover URL
+   is pulled from ``raw_payload.image`` via the ``cv_image_url`` global.
+
+   Cases handled:
+     1. Hydrated volume with cover → 64×96 (w-16 at 2:3) thumbnail.
+     2. Hydrated volume without a cover → text-only "Name (Year)" link.
+     3. Stub volume (raw_payload._stub=True) → text-only link; the caller
+        is expected to have already enqueued a revalidate so a future
+        page load shows the cover.
+     4. None → renders nothing. #}
+{% macro volume_chip(volume, from_issue_cv_id=None) %}
+  {% if volume %}
+    {% set cover_url = cv_image_url(volume.raw_payload, "thumb") %}
+    {% set label %}{{ volume.name }}{% if volume.year %} ({{ volume.year }}){% endif %}{% endset %}
+    {# When the caller provides ``from_issue_cv_id``, the chip links
+       to ``/volume/<id>?from=<issue>`` so the destination page
+       anchors its issue list on that issue (same pattern as the
+       arc-page → volume links). Callers that don't have a relevant
+       entry point pass nothing and get a bare ``/volume/<id>``. #}
+    {% set href %}/volume/{{ volume.cv_id }}{% if from_issue_cv_id %}?from={{ from_issue_cv_id }}{% endif %}{% endset %}
+    {% if cover_url %}
+      <a href="{{ href }}"
+         title="{{ label }}"
+         class="inline-block hover:opacity-70 transition-opacity">
+        <img src="{{ cover_url }}"
+             alt="{{ label }}"
+             class="w-24 rounded border border-slate-200 object-cover"
+             style="aspect-ratio: 2 / 3;">
+      </a>
+    {% else %}
+      <a href="{{ href }}"
+         class="text-sm text-slate-600 hover:text-slate-900">{{ label }}</a>
+    {% endif %}
+  {% endif %}
+{% endmacro %}

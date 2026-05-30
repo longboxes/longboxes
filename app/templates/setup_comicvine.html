@@ -1,0 +1,75 @@
+{% extends "_centered_card.html" %}
+{% block title %}Add your ComicVine key &middot; Longboxes{% endblock %}
+{% block subhead %}Step 2 of 2 &mdash; connect to ComicVine.{% endblock %}
+{% block card %}
+{# The wizard's second step. The setup_submit handler in
+   app/auth/routes.py validates the key against ComicVine with one
+   real call before saving, so a typo gets caught here instead of
+   silently breaking the matcher three minutes later. Match jobs
+   the scanner enqueued during the key-less window sit in the
+   match worker's held state (see
+   ``app/jobs/match_file.NO_KEY_RESCHEDULE_SECONDS``); they pick up
+   the freshly-saved key on their next reschedule wake. #}
+
+<div class="space-y-4">
+  <p class="text-sm text-slate-600">
+    Longboxes uses ComicVine to identify your comics and build the
+    library graph (volumes, story arcs, characters, creators). The
+    matcher won't start without a key.
+  </p>
+  <p class="text-sm text-slate-600">
+    Get a free key at
+    <a href="https://comicvine.gamespot.com/api/" target="_blank" rel="noopener"
+       class="text-slate-900 underline hover:no-underline">
+      comicvine.gamespot.com/api/
+    </a>
+    &mdash; it's on your account page once you sign in.
+  </p>
+
+  <form method="post" action="/setup/comicvine" class="space-y-4">
+    {% if error %}
+      <div class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-800">
+        {{ error }}
+      </div>
+    {% endif %}
+    <div>
+      <label for="api_key" class="block text-sm font-medium text-slate-700">
+        ComicVine API key
+      </label>
+      <input
+        id="api_key" name="api_key" type="text" required autofocus
+        autocomplete="off" spellcheck="false"
+        value="{{ api_key or '' }}"
+        placeholder="40-character hex string"
+        class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono
+               focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+      <p class="text-xs text-slate-500 mt-1">
+        We'll make one call to ComicVine to confirm the key before saving.
+      </p>
+    </div>
+    <button
+      type="submit"
+      class="w-full rounded-md bg-slate-900 text-white text-sm font-medium px-3 py-2
+             hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500
+             focus:ring-offset-2">
+      Test & save
+    </button>
+  </form>
+
+  {# Skip is a separate POST form (not just a link) so a browser
+     prefetch can't accidentally fire it. Same admin-only gate as the
+     main wizard step. #}
+  <form method="post" action="/setup/comicvine/skip">
+    <button
+      type="submit"
+      class="w-full rounded-md bg-white text-slate-700 text-sm font-medium px-3 py-2
+             border border-slate-300 hover:bg-slate-50 focus:outline-none
+             focus:ring-2 focus:ring-slate-300 focus:ring-offset-2">
+      Skip for now
+    </button>
+    <p class="text-xs text-slate-500 mt-2 text-center">
+      Library scans will still run; matching stays off until you set a key.
+    </p>
+  </form>
+</div>
+{% endblock %}

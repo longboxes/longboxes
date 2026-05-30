@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtualenvs
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Build artifacts
+dist/
+build/
+
+# Comic archives — a comic-library app's repo must never contain actual
+# comics: they're copyrighted, and they bloat the repo. Tests build
+# their own synthetic archives at runtime (tests/fixtures/cbz_builder.py).
+*.cbz
+*.cbr
+*.cbt
+
+# .empty-library/ is only the dev docker-compose's default library
+# mount. Keep the directory itself (so `just up` works on a fresh
+# clone) but never anything inside it.
+/.empty-library/*
+!/.empty-library/.gitkeep
+
+# Local scratch space — spikes and throwaway files.
+/scratch/

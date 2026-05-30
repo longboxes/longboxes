@@ -1,0 +1,189 @@
+{# Issue page navigation rail.
+
+   Vertical column with the previous volume neighbor (thumbnail) at
+   the top, the current issue as a marker node in the middle, and
+   the next volume neighbor (thumbnail) at the bottom. Each cross-
+   volume story arc emits a horizontal colored line + arrow from the
+   center node — left for arcs whose previous member lives elsewhere,
+   right for arcs whose next member lives elsewhere.
+
+   Implementation note: this is HTML/CSS rather than an SVG (like the
+   volume page rails). The layout is dominated by thumbnails and
+   short horizontal/vertical segments — no curves, no lanes, no
+   alignment-to-row math — so flex + Tailwind utilities are clearer
+   and more maintainable than equivalent SVG primitives. The visual
+   "rail" reading comes from the slate spine line, the ring-bound
+   center node, and the matched git-graph color palette on branches.
+
+   Designed for the issue page's right sidebar (~176px wide).
+   Renders nothing when there's no prev, no next, AND no arc
+   branches — i.e., a true singleton with no nav value. #}
+{% macro issue_rail(detail) %}
+  {% set pn = detail.prev_neighbor %}
+  {% set nn = detail.next_neighbor %}
+  {% set prev_branches = detail.arc_branches | selectattr('direction', 'equalto', 'prev') | list %}
+  {% set next_branches = detail.arc_branches | selectattr('direction', 'equalto', 'next') | list %}
+  {% if pn or nn or detail.arc_branches %}
+    <div>
+      <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">Issue rail</div>
+      {# Constrain the rail to ``w-24`` (96px) — matches the
+         publisher chip's logo and the volume chip's cover-thumb
+         width — and left-align it (no ``mx-auto``) so its left
+         edge sits flush with those chips. Without the constraint
+         the rail's branch columns are ``flex-1`` and stretch to
+         fill the full 11rem sidebar, creating visible dead space
+         on either side of the spine when no branches are present.
+         Branch text stays inside the 40px-per-side column thanks
+         to the tightened bar/gap below. #}
+      <div class="flex flex-col items-center w-24">
+
+        {# Top spine extension — short slate line fading to transparent
+           upward when the volume has issues earlier than the prev
+           neighbor we're showing. Communicates "the rail continues
+           up there" without making the user wonder if prev is the
+           first issue or not. Hidden when prev IS the first. #}
+        {% if detail.has_earlier_issues %}
+          <div class="w-0.5 bg-gradient-to-t from-slate-300 to-transparent"
+               style="height: 18px;"
+               title="More earlier issues in this volume"></div>
+        {% endif %}
+
+        {# Top: previous volume-order neighbor. Thumbnail is clickable;
+           empty placeholder of the same dimensions keeps the spine
+           centered when there's no prev (first issue in the volume). #}
+        {% if pn %}
+          <a href="/issue/{{ pn.cv_id }}"
+             title="{% if not pn.owned %}(missing) {% endif %}↑ #{{ pn.issue_number or '?' }}{% if pn.name %}: {{ pn.name }}{% endif %}"
+             class="block w-16 group">
+            <span class="block w-full rounded overflow-hidden border border-slate-200 bg-slate-100"
+                  style="aspect-ratio: 2 / 3;">
+              {% if pn.cover_url %}
+                {# Missing issues dim to 40% on the cover image so the
+                   user can see at a glance which neighbors are in the
+                   library. Hover restores full opacity for preview
+                   without losing the dim signal at rest. #}
+                <img src="{{ pn.cover_url }}" alt="" loading="lazy"
+                     class="w-full h-full object-cover transition-opacity {% if not pn.owned %}opacity-40 group-hover:opacity-100{% else %}group-hover:opacity-80{% endif %}">
+              {% else %}
+                <span class="flex h-full items-center justify-center text-[10px] text-slate-400">no cover</span>
+              {% endif %}
+            </span>
+            <span class="block text-[10px] text-center mt-1 font-mono {% if pn.owned %}text-slate-500{% else %}text-slate-400 italic{% endif %}">
+              #{{ pn.issue_number or "?" }}
+            </span>
+          </a>
+        {% else %}
+          {# Spacer so the spine still hangs from the same y-pos when
+             the issue has no previous neighbor (first in volume).
+             Width matches the thumbnail; height matches thumbnail +
+             label so center-node geometry stays consistent. #}
+          <div class="w-16" style="height: 109px;"></div>
+        {% endif %}
+
+        {# Top spine segment — short vertical slate line linking the
+           prev thumb (or its spacer) down to the center node row. #}
+        <div class="w-0.5 bg-slate-300" style="height: 20px;"></div>
+
+        {# Center: left branches | current node | right branches.
+           Width fills the sidebar so left/right branches have room
+           to lay horizontally outward; the spine continues through
+           the middle column via an absolutely-positioned filler so
+           branch rows don't break the vertical line. #}
+        <div class="relative flex w-full items-stretch py-1" style="min-height: 28px;">
+
+          {# Left branches: stacked vertically, right-aligned so each
+             arc arrow ends at the center node's edge. Arrow points
+             OUT-LEFT (← = "previous member lives in another
+             volume"). text-xl makes the arrow read as the obvious
+             click target; the colored bar is the arc-identity tail.
+             Hover slides the whole branch one step left (origin:
+             right edge so the bar stays anchored to the node) to
+             reinforce the "go there" affordance. #}
+          <div class="flex-1 flex flex-col items-end justify-center gap-1 pr-0.5">
+            {% for branch in prev_branches %}
+              <a href="/issue/{{ branch.target_cv_id }}"
+                 class="group inline-flex items-center gap-1 leading-none hover:-translate-x-0.5 transition-transform"
+                 style="color: {{ branch.color }}; transform-origin: right center;"
+                 title="← {{ branch.arc.name }}{% if branch.arc.primary_book %} ({{ branch.arc.primary_book }}){% endif %}{% if branch.target_volume_name %} · {{ branch.target_volume_name }}{% if branch.target_volume_year %} ({{ branch.target_volume_year }}){% endif %}{% endif %}{% if branch.target_issue_number %} #{{ branch.target_issue_number }}{% endif %}{% if branch.target_issue_name %}: {{ branch.target_issue_name }}{% endif %}">
+                <span class="text-xl font-bold leading-none transition-transform group-hover:scale-110">←</span>
+                <span class="block h-[3px] rounded-full"
+                      style="width: 12px; background: currentColor;"></span>
+              </a>
+            {% endfor %}
+          </div>
+
+          {# Middle column: spine + current-issue node. Spine is
+             absolutely positioned across the column's full height so
+             the line reads as continuous regardless of branch row
+             count above/below. Node sits on top with a ring + shadow
+             so it pops as the "you are here" marker. #}
+          <div class="relative flex items-center justify-center"
+               style="width: 16px;">
+            <div class="absolute inset-y-0 w-0.5 bg-slate-300"
+                 style="left: 50%; transform: translateX(-50%);"></div>
+            <div class="relative w-3.5 h-3.5 rounded-full bg-slate-700 ring-2 ring-white shadow-sm"
+                 title="This issue"></div>
+          </div>
+
+          {# Right branches: mirror of left. Arrow points OUT-RIGHT
+             (→ = "next member lives in another volume"). Same
+             larger-arrow + hover-slide treatment as the left side. #}
+          <div class="flex-1 flex flex-col items-start justify-center gap-1 pl-0.5">
+            {% for branch in next_branches %}
+              <a href="/issue/{{ branch.target_cv_id }}"
+                 class="group inline-flex items-center gap-1 leading-none hover:translate-x-0.5 transition-transform"
+                 style="color: {{ branch.color }}; transform-origin: left center;"
+                 title="→ {{ branch.arc.name }}{% if branch.arc.primary_book %} ({{ branch.arc.primary_book }}){% endif %}{% if branch.target_volume_name %} · {{ branch.target_volume_name }}{% if branch.target_volume_year %} ({{ branch.target_volume_year }}){% endif %}{% endif %}{% if branch.target_issue_number %} #{{ branch.target_issue_number }}{% endif %}{% if branch.target_issue_name %}: {{ branch.target_issue_name }}{% endif %}">
+                <span class="block h-[3px] rounded-full"
+                      style="width: 12px; background: currentColor;"></span>
+                <span class="text-xl font-bold leading-none transition-transform group-hover:scale-110">→</span>
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Bottom spine segment — longer than the top (40 vs 20 px)
+           to compensate for the prev side's #N label sitting INSIDE
+           its anchor between the thumb and the top spine. The extra
+           20 px on this side reaches down to where the prev thumb's
+           bottom edge sits relative to the node, so the node reads
+           as centered between the two thumbnails. Keeping the
+           padding ON the spine (rather than on the next anchor)
+           avoids a visual break in the line. #}
+        <div class="w-0.5 bg-slate-300" style="height: 40px;"></div>
+
+        {# Bottom: next volume-order neighbor. #}
+        {% if nn %}
+          <a href="/issue/{{ nn.cv_id }}"
+             title="{% if not nn.owned %}(missing) {% endif %}↓ #{{ nn.issue_number or '?' }}{% if nn.name %}: {{ nn.name }}{% endif %}"
+             class="block w-16 group">
+            <span class="block w-full rounded overflow-hidden border border-slate-200 bg-slate-100"
+                  style="aspect-ratio: 2 / 3;">
+              {% if nn.cover_url %}
+                {# Same missing-dim treatment as the prev thumb above. #}
+                <img src="{{ nn.cover_url }}" alt="" loading="lazy"
+                     class="w-full h-full object-cover transition-opacity {% if not nn.owned %}opacity-40 group-hover:opacity-100{% else %}group-hover:opacity-80{% endif %}">
+              {% else %}
+                <span class="flex h-full items-center justify-center text-[10px] text-slate-400">no cover</span>
+              {% endif %}
+            </span>
+            <span class="block text-[10px] text-center mt-1 font-mono {% if nn.owned %}text-slate-500{% else %}text-slate-400 italic{% endif %}">
+              #{{ nn.issue_number or "?" }}
+            </span>
+          </a>
+        {% else %}
+          <div class="w-16" style="height: 109px;"></div>
+        {% endif %}
+
+        {# Bottom spine extension — mirror of the top. Fades downward
+           when there are issues later than the next neighbor. #}
+        {% if detail.has_later_issues %}
+          <div class="w-0.5 bg-gradient-to-b from-slate-300 to-transparent"
+               style="height: 18px;"
+               title="More later issues in this volume"></div>
+        {% endif %}
+
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}

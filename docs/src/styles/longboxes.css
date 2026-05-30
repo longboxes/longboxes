@@ -1,0 +1,169 @@
+/*
+ * Longboxes Starlight theme overrides.
+ *
+ * Maps the landing page's paper-and-burnt-orange palette onto
+ * Starlight's CSS-variable surface. Starlight exposes every color /
+ * font through `--sl-color-*` and `--sl-font-*`; overriding those
+ * propagates through every component (sidebar, content, code blocks,
+ * tabs, search) without forking any markup.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  /* Brand tokens — kept identical to the landing page so the docs
+   * site and the marketing surface feel like one product. */
+  --lb-paper: #f2ede2;
+  --lb-paper-warm: #faf5e9;
+  --lb-paper-deeper: #ece5d4;
+  --lb-ink: #1f1b16;
+  --lb-ink-soft: #5b554b;
+  --lb-ink-faint: #8c857a;
+  --lb-rule: #dcd3bf;
+  --lb-rule-soft: #e8dfd0;
+  --lb-accent-burnt: #b8602c;
+  --lb-accent-cobalt: #2d6a8c;
+  --lb-accent-forest: #4f6b3d;
+  --lb-accent-plum: #6b3f70;
+  --lb-accent-brick: #a23939;
+}
+
+/* Light theme — the canonical paper look. */
+:root[data-theme="light"] {
+  --sl-color-bg: var(--lb-paper);
+  --sl-color-bg-nav: rgba(242, 237, 226, 0.92);
+  --sl-color-bg-sidebar: var(--lb-paper);
+  --sl-color-bg-inline-code: var(--lb-paper-deeper);
+  --sl-color-bg-accent: var(--lb-accent-burnt);
+
+  --sl-color-text: var(--lb-ink);
+  --sl-color-text-accent: var(--lb-accent-burnt);
+  --sl-color-text-invert: var(--lb-paper);
+
+  --sl-color-hairline: var(--lb-rule);
+  --sl-color-hairline-light: var(--lb-rule-soft);
+  --sl-color-hairline-shade: var(--lb-rule);
+
+  --sl-color-white: var(--lb-ink);
+  --sl-color-gray-1: var(--lb-ink);
+  --sl-color-gray-2: var(--lb-ink-soft);
+  --sl-color-gray-3: var(--lb-ink-faint);
+  --sl-color-gray-4: var(--lb-ink-faint);
+  --sl-color-gray-5: var(--lb-rule);
+  --sl-color-gray-6: var(--lb-rule-soft);
+  --sl-color-black: var(--lb-paper);
+
+  --sl-color-accent-low: rgba(184, 96, 44, 0.12);
+  --sl-color-accent: var(--lb-accent-burnt);
+  --sl-color-accent-high: #a0521f;
+}
+
+/* Dark theme — same palette inverted onto the "interior" ink color
+ * the landing page uses for its dark cards.
+ *
+ * Note on Starlight's color naming: ``--sl-color-white`` is the
+ * highest-contrast *text* color (light in dark mode, dark in light
+ * mode) and ``--sl-color-black`` is the lowest-contrast *surface*
+ * color (used as the Card / inline-code background). The names are
+ * fixed across themes; the values invert. Map them accordingly:
+ * white → paper, black → deepest surface. */
+:root[data-theme="dark"] {
+  --sl-color-bg: #2a2620;
+  --sl-color-bg-nav: rgba(42, 38, 32, 0.92);
+  --sl-color-bg-sidebar: #221f1a;
+  --sl-color-bg-inline-code: #3d3830;
+  --sl-color-bg-accent: var(--lb-accent-burnt);
+
+  --sl-color-text: var(--lb-paper);
+  --sl-color-text-accent: #d97843;
+  --sl-color-text-invert: var(--lb-ink);
+
+  --sl-color-hairline: #4a4338;
+  --sl-color-hairline-light: #3d3830;
+  --sl-color-hairline-shade: #4a4338;
+
+  --sl-color-white: var(--lb-paper);
+  --sl-color-gray-1: var(--lb-paper);
+  --sl-color-gray-2: #cdc4b3;
+  --sl-color-gray-3: #a39c8e;
+  --sl-color-gray-4: #6f6a60;
+  --sl-color-gray-5: #4a4338;
+  --sl-color-gray-6: #3d3830;
+  /* Card / surface background — must be darker than text so Card
+   * bodies are readable. */
+  --sl-color-black: #1a1714;
+
+  --sl-color-accent-low: rgba(184, 96, 44, 0.18);
+  --sl-color-accent: #d97843;
+  --sl-color-accent-high: #e89561;
+}
+
+/* Typography — Fraunces for display, DM Sans for body, JetBrains Mono
+ * for code. Variable-font fallback chains keep things readable if the
+ * Google Fonts request fails. */
+:root {
+  --sl-font: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+}
+
+/* Headings get the serif treatment. Starlight uses h1-h4 in content;
+ * the sidebar / nav stay in DM Sans for clarity at small sizes. */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.sl-markdown-content h4 {
+  font-family: "Fraunces", Georgia, serif;
+  font-variation-settings: "opsz" 36, "SOFT" 0;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.sl-markdown-content h1 {
+  font-variation-settings: "opsz" 72, "SOFT" 0;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+}
+
+/* The hero h1 on the home page wants the bigger optical size. */
+.hero h1,
+.hero-title {
+  font-family: "Fraunces", Georgia, serif;
+  font-variation-settings: "opsz" 96, "SOFT" 0;
+  letter-spacing: -0.025em;
+}
+
+/* Subtle paper grain — radial color washes lifted from the landing
+ * page, so the docs feel like the same physical surface. Light theme
+ * only; dark mode stays clean. */
+:root[data-theme="light"] body {
+  background-image:
+    radial-gradient(circle at 15% 8%, rgba(184, 96, 44, 0.045) 0%, transparent 38%),
+    radial-gradient(circle at 88% 32%, rgba(45, 106, 140, 0.04) 0%, transparent 42%),
+    radial-gradient(circle at 50% 88%, rgba(80, 60, 40, 0.028) 0%, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Burnt-orange selection — the landing page's signature. */
+::selection {
+  background: var(--lb-accent-burnt);
+  color: var(--lb-paper);
+}
+
+/* Tighten inline code so it doesn't visually break the line. */
+.sl-markdown-content :not(pre) > code {
+  font-size: 0.92em;
+  padding: 0.12em 0.4em;
+  border-radius: 3px;
+  border: 1px solid var(--sl-color-hairline-light);
+}
+
+/* Make the burnt-orange accent visible on links inside content. */
+.sl-markdown-content a:not(.sl-anchor-link) {
+  color: var(--sl-color-text-accent);
+  text-decoration-color: var(--sl-color-hairline);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 140ms ease;
+}
+.sl-markdown-content a:not(.sl-anchor-link):hover {
+  text-decoration-color: var(--sl-color-text-accent);
+}

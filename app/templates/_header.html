@@ -1,0 +1,254 @@
+{# Shared site header. Include with `{% include "_header.html" %}` from any
+   authenticated page. Expects `user` in context.
+
+   Responsive: on sm+ the full bar (brand · nav links · user / sign-out)
+   sits on one row. On mobile the links and user area collapse behind a
+   hamburger, so the header is a single compact row — brand left, menu
+   button right — which keeps page content higher above the fold. #}
+
+{# Reading-progress tracking toggle ("incognito reading"). Posts to
+   /reading/tracking, which flips the per-user flag and redirects back.
+   An open eye means progress is being recorded; a struck-through eye
+   (amber) means tracking is paused. #}
+{% macro tracking_toggle(user) %}
+  <form method="post" action="/reading/tracking" class="inline-flex shrink-0">
+    <button type="submit"
+            aria-label="Toggle reading-progress tracking"
+            title="{% if user.track_reading_progress %}Reading progress is being tracked — click to pause{% else %}Reading progress is paused — click to resume tracking{% endif %}"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100 {{ 'text-amber-600' if not user.track_reading_progress else 'text-slate-500' }}">
+      {% if user.track_reading_progress %}
+        {# Open eye — progress is being tracked. #}
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      {% else %}
+        {# Struck-through eye — tracking is paused. #}
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+        </svg>
+      {% endif %}
+    </button>
+  </form>
+{% endmacro %}
+
+{# Global search box + live dropdown. Renders the same input + panel
+   whether placed in the desktop top row or the mobile menu — the
+   wrapping form submits to /search?q=... on Enter (with no row
+   highlighted) so it works without JS too. Alpine drives the live
+   dropdown via setupSearchDropdown() in search-dropdown.js. #}
+{% macro search_box(input_id) %}
+  <form action="/search" method="get"
+        x-data="setupSearchDropdown()"
+        @click.outside="close()"
+        @keydown.escape.window="close()"
+        class="relative w-full">
+    <label for="{{ input_id }}" class="sr-only">Search</label>
+    <div class="relative">
+      <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none"
+             viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+        </svg>
+      </span>
+      <input type="search" name="q" id="{{ input_id }}" autocomplete="off"
+             x-model="q"
+             @input.debounce.200ms="fetchResults()"
+             @focus="onFocus()"
+             @keydown.down.prevent="moveDown()"
+             @keydown.up.prevent="moveUp()"
+             @keydown.enter="onEnter($event)"
+             placeholder="Search library…"
+             class="w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400">
+    </div>
+    {# Dropdown panel. Hidden until ``open`` flips and there's either
+       content, a loading state, or the "type N chars" hint to show.
+       Anchored to the wrapping form (relative) so it spans the input's
+       full width. ``z-40`` sits above page chrome but below modal
+       overlays. #}
+    <div x-show="open" x-cloak x-transition.opacity.duration.100ms
+         class="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[70vh] overflow-y-auto z-40">
+      {# 1. Too-short query — gentle hint, no network call. #}
+      <template x-if="q.trim().length > 0 && q.trim().length < minLength">
+        <div class="p-3 text-xs text-slate-500"
+             x-text="'Type at least ' + minLength + ' characters to search.'"></div>
+      </template>
+      {# 2. Loading shimmer (first stroke past the threshold). #}
+      <template x-if="loading && total === 0">
+        <div class="p-3 text-xs text-slate-500">Searching…</div>
+      </template>
+      {# 3. No hits. #}
+      <template x-if="!loading && q.trim().length >= minLength && total === 0">
+        <div class="p-3 text-xs text-slate-500">No results in your library.</div>
+      </template>
+      {# 4. Grouped hits. #}
+      <template x-if="total > 0">
+        <div class="py-1">
+          <template x-for="[label, key] in GROUPS" :key="key">
+            <div x-show="groups[key] && groups[key].length">
+              <div class="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+                   x-text="label"></div>
+              <template x-for="hit in groups[key]" :key="key + ':' + hit.key">
+                <a :href="hit.detail_url"
+                   :class="{ 'bg-slate-100': activeHitKey === (key + ':' + hit.key) }"
+                   class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100">
+                  <span class="w-8 h-8 shrink-0 rounded overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-[9px] text-slate-400">
+                    <template x-if="hit.cover_url">
+                      <img :src="hit.cover_url" alt="" loading="lazy"
+                           class="w-full h-full object-cover">
+                    </template>
+                    <template x-if="!hit.cover_url">
+                      <span x-text="hit.name.split(' ').map(w => w[0] || '').join('').slice(0,2).toUpperCase() || '?'"></span>
+                    </template>
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm text-slate-900 truncate" x-text="hit.name"></span>
+                    <template x-if="hit.subtitle">
+                      <span class="block text-xs text-slate-500 truncate" x-text="hit.subtitle"></span>
+                    </template>
+                  </span>
+                </a>
+              </template>
+            </div>
+          </template>
+          <a :href="'/search?q=' + encodeURIComponent(q)"
+             class="block border-t border-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+            See all results &rarr;
+          </a>
+        </div>
+      </template>
+    </div>
+  </form>
+{% endmacro %}
+
+{# Help link — opens the docs site (docs.longboxes.app) in a new tab.
+   Matches the icon-button footprint of ``tracking_toggle`` so the
+   header controls line up. #}
+{% macro help_link() %}
+  <a href="https://docs.longboxes.app" target="_blank" rel="noopener"
+     aria-label="Documentation"
+     title="Documentation"
+     class="inline-flex shrink-0 items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100 text-slate-500">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none"
+         viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+    </svg>
+  </a>
+{% endmacro %}
+
+<header x-data="{ menuOpen: false }" class="border-b border-slate-200 bg-white">
+  <div class="max-w-6xl mx-auto px-6">
+    {# Top row — always exactly one line. #}
+    <div class="py-3 flex items-center justify-between gap-4">
+      {# Brand + (sm+) nav links. #}
+      <div class="flex items-center gap-4">
+        {# Logo + wordmark are one anchor so the whole "brand" hits ``/``
+           as a single click target. Logo is 28px tall; ``-ml-1`` tucks
+           it back so the wordmark sits flush. ``select-none`` keeps the
+           icon from highlighting on a wordmark double-click. #}
+        <a href="/" class="flex items-center gap-1.5 text-slate-900 -ml-1 select-none shrink-0">
+          <img src="{{ static_url('longboxes-logo.svg') }}" alt=""
+               class="h-7 w-auto shrink-0" aria-hidden="true">
+          <span class="font-semibold tracking-tight">Longboxes</span>
+        </a>
+        {# Desktop nav links — hidden on mobile, where they move into
+           the hamburger panel below. #}
+        <nav class="hidden sm:flex items-center gap-4">
+          <a href="/library" class="text-sm text-slate-600 hover:text-slate-900">Library</a>
+          {% if user is defined and user is not none and user.role == "admin" %}
+            {# Review + Admin + Health are admin-only. Review (the
+               matcher's PENDING queue) is visited often, so it sits
+               left of the Admin / Health settings pages. #}
+            <a href="/review" class="text-sm text-slate-600 hover:text-slate-900">Review</a>
+            <a href="/admin" class="text-sm text-slate-600 hover:text-slate-900">Admin</a>
+            <a href="/admin/health" class="text-sm text-slate-600 hover:text-slate-900">Health</a>
+          {% endif %}
+        </nav>
+      </div>
+
+      {# Desktop search — sits between the brand+nav block and the
+         user area, flex-grown so it picks up whatever horizontal
+         space is left without crowding either side. Hidden on mobile
+         (moves into the menu panel). Only rendered when there's a
+         signed-in user so the login page doesn't carry a useless
+         input. #}
+      {% if user is defined and user is not none %}
+        <div class="hidden sm:block flex-1 max-w-md mx-2">
+          {{ search_box("site-search-desktop") }}
+        </div>
+      {% endif %}
+
+      {# Desktop user area — hidden on mobile (moves into the panel). #}
+      <div class="hidden sm:flex items-center gap-3 text-sm text-slate-600 shrink-0">
+        {% if user is defined and user is not none %}
+          {{ tracking_toggle(user) }}
+          {{ help_link() }}
+          <span>{{ user.username }}</span>
+          <form method="post" action="/logout" class="inline">
+            <button type="submit"
+                    class="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100">
+              Sign out
+            </button>
+          </form>
+        {% endif %}
+      </div>
+
+      {# Mobile menu button — hidden on sm+. Shows a hamburger when
+         closed, an X when open. #}
+      <button type="button" @click="menuOpen = !menuOpen"
+              :aria-expanded="menuOpen" aria-label="Menu"
+              class="sm:hidden shrink-0 -mr-2 inline-flex items-center justify-center w-9 h-9 rounded-md text-slate-600 hover:bg-slate-100">
+        <svg x-show="!menuOpen" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5"
+             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        <svg x-show="menuOpen" x-cloak xmlns="http://www.w3.org/2000/svg" class="w-5 h-5"
+             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    {# Mobile menu panel — the nav links + user area, stacked. Static
+       ``hidden`` is the closed default (correct before Alpine inits, so
+       no flash); ``sm:hidden`` keeps it off desktop regardless of
+       ``menuOpen``; ``:class`` flips only the mobile ``hidden``. #}
+    <div :class="{ 'hidden': !menuOpen }"
+         class="hidden sm:hidden border-t border-slate-200 py-2">
+      {% if user is defined and user is not none %}
+        {# Mobile search — full-width inside the menu panel so the
+           dropdown has somewhere to land. #}
+        <div class="px-1 pb-2">
+          {{ search_box("site-search-mobile") }}
+        </div>
+      {% endif %}
+      <a href="/library"
+         class="block px-1 py-2 text-sm text-slate-700 hover:text-slate-900">Library</a>
+      {% if user is defined and user is not none and user.role == "admin" %}
+        <a href="/review"
+           class="block px-1 py-2 text-sm text-slate-700 hover:text-slate-900">Review</a>
+        <a href="/admin"
+           class="block px-1 py-2 text-sm text-slate-700 hover:text-slate-900">Admin</a>
+        <a href="/admin/health"
+           class="block px-1 py-2 text-sm text-slate-700 hover:text-slate-900">Health</a>
+      {% endif %}
+      {% if user is defined and user is not none %}
+        <div class="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2 min-w-0">
+            {{ tracking_toggle(user) }}
+            {{ help_link() }}
+            <span class="text-sm text-slate-600 truncate">{{ user.username }}</span>
+          </div>
+          <form method="post" action="/logout">
+            <button type="submit"
+                    class="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100">
+              Sign out
+            </button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</header>

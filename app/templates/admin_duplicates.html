@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% from "_path_link.html" import path_link, path_link_script %}
+{# Issue-duplicate group rendering and the ``fmt_size`` helper both
+   live in the shared partial so the per-issue compare page renders
+   identically. #}
+{% from "_issue_duplicate_card.html" import issue_duplicate_card, fmt_size %}
+{% block title %}Duplicates &middot; Admin &middot; Longboxes{% endblock %}
+
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-5xl mx-auto px-6 py-6 space-y-8">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/admin/health" class="hover:underline">&larr; Admin health</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Duplicates</h1>
+    <p class="text-sm text-slate-600">
+      Two kinds of duplicates show up here. <strong>Hash
+      duplicates</strong> are the same archive (byte-identical) at
+      multiple paths on disk &mdash; deletion is lossless once one
+      path is kept. <strong>Issue duplicates</strong> are different
+      files (different sha256) all claiming the same ComicVine
+      issue, typically two scans or re-encodes of the same comic
+      &mdash; we score each file by quality and highlight a
+      recommended keeper. Actions are read-only plus an
+      <em>exclude from matching</em> toggle; on-disk deletes are
+      yours to do.
+    </p>
+  </div>
+
+  {% if request.query_params.get('excluded') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      File marked excluded from matching. The next match run will leave it alone.
+    </div>
+  {% elif request.query_params.get('supplemented') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      File re-resolved as a supplement on its volume. It&rsquo;ll show in the volume page&rsquo;s Supplements section.
+    </div>
+  {% elif request.query_params.get('no_issue') %}
+    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      Couldn&rsquo;t attach as a supplement: the file isn&rsquo;t currently matched to a CV issue, so there&rsquo;s no volume to attach to.
+    </div>
+  {% elif request.query_params.get('no_volume') %}
+    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      Couldn&rsquo;t attach as a supplement: the CV issue exists but has no volume reference yet. Try again after the next volume revalidation.
+    </div>
+  {% elif request.query_params.get('bad_supplement_type') %}
+    <div class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+      Unrecognised supplement type. The dropdown shouldn&rsquo;t let this happen &mdash; pick one from the list.
+    </div>
+  {% endif %}
+
+  {# Jump nav — both sections can be long on a real library, so let
+     the operator skip straight to whichever bucket they're triaging.
+     The anchors below match the ``id`` attributes on each <section>.
+     Counts double as a quick "which bucket has more work" signal. #}
+  <nav class="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-2 text-sm">
+    <span class="text-xs uppercase tracking-wide text-slate-500 mr-2">Jump to</span>
+    <a href="#hash-duplicates"
+       class="rounded-md border border-slate-300 bg-white text-slate-700 px-3 py-1 hover:bg-slate-100">
+      Hash duplicates
+      <span class="ml-1 text-slate-500">({{ hash_groups|length }})</span>
+    </a>
+    <a href="#issue-duplicates"
+       class="rounded-md border border-slate-300 bg-white text-slate-700 px-3 py-1 hover:bg-slate-100">
+      Issue duplicates
+      {# Count shown is the *displayable* groups (cover hydrated).
+         The deferred-count banner inside the section reveals the
+         total inventory if it differs. #}
+      <span class="ml-1 text-slate-500">({{ issue_groups|length }})</span>
+    </a>
+  </nav>
+
+  {# ==================== HASH DUPLICATES =============================== #}
+  {# scroll-mt offsets the sticky-ish header so an anchor jump doesn't
+     land the title up against the top of the viewport. #}
+  <section id="hash-duplicates" class="space-y-3 scroll-mt-6">
+    <header>
+      <h2 class="text-lg font-semibold tracking-tight">Hash duplicates</h2>
+      <p class="text-xs text-slate-500">
+        One <code class="font-mono">files</code> row, multiple
+        current paths. Pick any path to keep &mdash; the others can
+        be deleted from disk without quality loss.
+      </p>
+    </header>
+
+    {% if not hash_groups %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-center text-sm text-slate-500">
+        No hash duplicates.
+      </div>
+    {% else %}
+      {% for g in hash_groups %}
+        <section class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <header class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-baseline justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-slate-800">
+                {{ g.locations|length }} copies on disk
+              </div>
+              <div class="text-xs text-slate-500 font-mono">
+                {{ g.sha256[:16] }}…
+                &middot; {{ g.archive_format or 'unknown' }}
+                {% if g.size_bytes %}&middot; {{ fmt_size(g.size_bytes) }}{% endif %}
+                {% if g.page_count %}&middot; {{ g.page_count }} pp{% endif %}
+              </div>
+            </div>
+            {% if g.excluded_from_matching %}
+              <span class="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
+                excluded from matching
+              </span>
+            {% endif %}
+          </header>
+          <ul class="divide-y divide-slate-100">
+            {% for loc in g.locations %}
+              <li class="px-4 py-3 flex flex-wrap items-start gap-3">
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm text-slate-800 break-all">{{ path_link(loc.path) }}</div>
+                  <div class="text-xs text-slate-400 mt-1">
+                    last seen {{ loc.last_seen_at.strftime('%Y-%m-%d %H:%M:%SZ') }}
+                  </div>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+          {% if not g.excluded_from_matching %}
+            <div class="px-4 py-2 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <form method="post" action="/admin/duplicates/file/{{ g.file_id }}/exclude"
+                    onsubmit="return confirm('Exclude this file from matching? Future scans will leave it alone.')">
+                <button type="submit"
+                        class="rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-100">
+                  Exclude from matching
+                </button>
+              </form>
+            </div>
+          {% endif %}
+        </section>
+      {% endfor %}
+    {% endif %}
+  </section>
+
+  {# ==================== ISSUE DUPLICATES ============================== #}
+  <section id="issue-duplicates" class="space-y-3 scroll-mt-6">
+    <header>
+      <h2 class="text-lg font-semibold tracking-tight">Issue duplicates</h2>
+      <p class="text-xs text-slate-500">
+        Different files all matched to the same CV issue. Scoring
+        order, best first: <strong>plausibility of being a real
+        issue</strong> (15+ pages beats 5&ndash;14 beats &lt;5)
+        &rarr; ComicInfo coverage (full-with-CV-id &gt; partial &gt;
+        none) &rarr; page resolution (interior sample preferred,
+        cover as fallback) &rarr; file size &rarr; format (CBZ
+        &gt; CBR &gt; CB7 &gt; PDF) &rarr; raw page count &rarr;
+        recency. The plausibility bucket exists so a 3-page sketch
+        variant can't outrank a 25-page real comic on any
+        combination of lower-tier signals.
+      </p>
+    </header>
+
+    {# Mid-hydration banner — groups whose CV issue cover isn't yet
+       cached are deliberately hidden so the comparison stays
+       meaningful (the CV cover is the reference image). The route
+       has already re-enqueued the relevant volume_issues jobs at
+       the head of the queue; reloading once they finish surfaces
+       the deferred groups. #}
+    {% if deferred_count %}
+      <div class="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 flex items-baseline gap-2">
+        <span class="font-medium">{{ deferred_count }} group{{ "s" if deferred_count != 1 else "" }} hidden.</span>
+        <span class="text-sky-700">
+          Their ComicVine issue covers are still loading &mdash; we&rsquo;ve nudged the bulk hydration job, refresh in a moment.
+        </span>
+      </div>
+    {% endif %}
+
+    {% if not issue_groups %}
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-center text-sm text-slate-500">
+        {% if deferred_count %}
+          No issue-duplicate groups ready to display &mdash; see the hydration notice above.
+        {% else %}
+          No issue duplicates.
+        {% endif %}
+      </div>
+    {% else %}
+      {% for g in issue_groups %}
+        {{ issue_duplicate_card(g, supplement_types) }}
+      {% endfor %}
+    {% endif %}
+  </section>
+
+  {# Inject the clipboard handler once for the whole page — the macro
+     binds a single delegated listener that works for every Copy
+     button rendered above (hash group locations + issue group
+     paths). #}
+  {{ path_link_script() }}
+</main>
+{% endblock %}

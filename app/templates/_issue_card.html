@@ -1,0 +1,57 @@
+{# Issue cover card — the 2:3 cover thumbnail used in both the
+   volume page's gallery view and the arc page's gallery view.
+
+   Anchor → cover image (or "no cover" fallback) with an emerald
+   "owned" dot in the top-right, plus a hover overlay carrying
+   ``#N`` + ``name``. Missing-issue thumbnails are dimmed to 40%
+   so the visual immediately conveys "you don't have this one yet"
+   while staying recognizable on hover.
+
+   Carries ``id``, ``data-pending-id``, ``data-hydrated`` so the
+   auto-refresh helper can find and swap it once the underlying
+   ``cv_issues`` row hydrates. Callers pass the full ``dom_id`` —
+   each page picks its own ID convention to avoid collisions when
+   the same issue would otherwise render twice (e.g., across
+   multiple arc shelves on the arc page, or across List + Gallery
+   views in the DOM under ``x-show`` on the volume page):
+
+     Volume gallery → ``gallery-issue-<cv_id>``
+     Arc gallery    → ``arc-gallery-<cv_id>``
+
+   ``dom_id`` can be omitted (passed as ``None`` or empty string)
+   when the card legitimately appears more than once in the DOM —
+   e.g., the volume page's "Arcs" view, where the same issue
+   shows up across multiple per-arc shelves. Skipping the id +
+   data attributes there avoids duplicate-id violations and tells
+   the auto-refresh helper not to track these copies.
+
+   Title attribute carries the same ``#N name`` shown in the hover
+   overlay, plus ``(missing)`` when not owned — visible on long-
+   hover even before the gradient overlay fades in. #}
+{% from "_progress_bar.html" import progress_bar %}
+{% macro issue_cover_card(i, dom_id=none) %}
+  {% set display_name = i.name or ("Issue " ~ (i.issue_number or "?")) %}
+  <a {% if dom_id %}id="{{ dom_id }}"
+        data-pending-id="{{ i.cv_id }}"
+        data-hydrated="{{ 'true' if i.is_hydrated else 'false' }}"{% endif %}
+     href="/issue/{{ i.cv_id }}"
+     title="#{{ i.issue_number or '?' }} {{ display_name }}{% if not i.owned %} (missing){% endif %}"
+     class="group relative block rounded overflow-hidden border border-slate-200 bg-white"
+     style="aspect-ratio: 2 / 3;">
+    {% if i.cover_url %}
+      <img src="{{ i.cover_url }}" alt="" loading="lazy"
+           class="absolute inset-0 w-full h-full object-cover transition-opacity {% if not i.owned %}opacity-40 group-hover:opacity-100{% endif %}">
+    {% else %}
+      <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400 transition-opacity {% if not i.owned %}opacity-60 group-hover:opacity-100{% endif %}">no cover</div>
+    {% endif %}
+    {% if i.owned %}
+      <span class="absolute top-1.5 right-1.5 inline-block w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white shadow"></span>
+    {% endif %}
+    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-2 py-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+      <div class="text-[10px] font-mono opacity-80 leading-tight">#{{ i.issue_number or "?" }}</div>
+      <div class="text-xs font-medium leading-tight line-clamp-2">{{ display_name }}</div>
+    </div>
+    {# Reading-progress bar along the cover's bottom edge. #}
+    {{ progress_bar(i.progress) }}
+  </a>
+{% endmacro %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_path_link.html" import path_link_script %}
+{# Same partial admin_duplicates.html uses; renders the group card
+   plus its action set (Review / Make supplement / Exclude). #}
+{% from "_issue_duplicate_card.html" import issue_duplicate_card %}
+
+{% block title %}
+  Compare files &middot;
+  {% if group.volume_name %}{{ group.volume_name }}{% else %}Volume {{ group.volume_cv_id or '?' }}{% endif %}
+  {% if group.issue_number %}#{{ group.issue_number }}{% endif %}
+  &middot; Longboxes
+{% endblock %}
+
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-5xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    {# Breadcrumb back to the issue page. The Compare button on the
+       issue page is the typical entry point, so making the return
+       trip obvious matters. ``/issue/N`` shows the matched-files
+       section the operator just came from. #}
+    <nav class="text-xs text-slate-500">
+      <a href="/issue/{{ group.issue_cv_id }}" class="hover:underline">
+        &larr;
+        {% if group.volume_name %}{{ group.volume_name }}{% else %}Volume {{ group.volume_cv_id or '?' }}{% endif %}
+        {% if group.issue_number %}#{{ group.issue_number }}{% endif %}
+      </a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">Compare files</h1>
+    <p class="text-sm text-slate-600">
+      {{ group.files|length }} files claim this issue. The
+      <strong>Recommended keeper</strong> is the highest-scoring file
+      across page-count plausibility, interior resolution, cover
+      resolution, archive format, ComicInfo coverage, archive size,
+      and scan recency &mdash; the same ranking the
+      <a href="/admin/duplicates" class="hover:underline">duplicates
+      inspector</a> uses. Use <strong>Make supplement</strong> when a
+      file is bonus content (a cover gallery, a sketch variant) rather
+      than the issue itself; <strong>Exclude</strong> when you want
+      the matcher to stop claiming a file as this issue while you
+      figure out what to do with it; <strong>Review</strong> for
+      manual fix-match to a different issue.
+    </p>
+  </div>
+
+  {{ issue_duplicate_card(group, supplement_types) }}
+
+  {# Clipboard handler for the path Copy buttons inside the card. #}
+  {{ path_link_script() }}
+</main>
+{% endblock %}

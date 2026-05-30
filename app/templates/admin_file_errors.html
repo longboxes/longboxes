@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "_path_link.html" import path_link, path_link_script %}
+{% block title %}File errors &middot; Admin &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+
+<main class="max-w-5xl mx-auto px-6 py-6 space-y-6">
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/admin/health" class="hover:underline">&larr; Admin health</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">File errors</h1>
+    <p class="text-sm text-slate-600">
+      Files the scanner, cover endpoint, or ComicInfo parser
+      couldn&rsquo;t process. Rows auto-clear on the next scan that
+      handles the same path cleanly &mdash; this page shows
+      what&rsquo;s broken <em>right now</em>, not historical
+      failures. The <strong>Try open</strong> button re-runs the
+      archive open against the recorded path; success deletes the
+      row in place.
+    </p>
+  </div>
+
+  {# Banner — feedback for the most recent action, if any. #}
+  {% if request.query_params.get('opened') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      Archive opened cleanly. The row was cleared.
+    </div>
+  {% elif request.query_params.get('open_failed') %}
+    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      Archive still won&rsquo;t open. The row&rsquo;s error message was refreshed below.
+    </div>
+  {% elif request.query_params.get('dismissed') %}
+    <div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      Row dismissed.
+    </div>
+  {% endif %}
+
+  {% if total == 0 %}
+    <section class="bg-white border border-slate-200 rounded-lg p-8 text-center text-sm text-slate-500">
+      No file errors right now. Anything broken would show up here
+      after the next scan or cover-view tries it and fails.
+    </section>
+  {% else %}
+    <section class="bg-white border border-slate-200 rounded-lg p-4">
+      <div class="text-sm font-medium text-slate-800">
+        {{ total }} file{{ "s" if total != 1 else "" }} with errors
+      </div>
+      <div class="text-xs text-slate-500">
+        Rows clear automatically when the next scan handles the
+        same path without raising.
+      </div>
+    </section>
+
+    {# One section per kind. Same grouped structure as
+       /admin/failed-jobs so the muscle memory carries over. #}
+    {% for kind, items in grouped %}
+      <section class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <header class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div class="min-w-0">
+            <h2 class="text-sm font-semibold text-slate-900">
+              {{ kind_labels.get(kind, kind) }}
+            </h2>
+            <p class="text-xs text-slate-500 font-mono">
+              kind = {{ kind }} &middot; {{ items|length }} file{{ "s" if items|length != 1 else "" }}
+            </p>
+          </div>
+        </header>
+        <ul class="divide-y divide-slate-100">
+          {% for r in items %}
+            <li class="px-4 py-3 flex flex-wrap items-start gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-slate-800 break-all">{{ path_link(r.path) }}</div>
+                {% if r.error_class or r.error_message %}
+                  <div class="text-xs text-rose-700 mt-1 font-mono break-all">
+                    {% if r.error_class %}{{ r.error_class }}{% if r.error_message %}: {% endif %}{% endif %}{{ r.error_message }}
+                  </div>
+                {% endif %}
+                <div class="text-xs text-slate-400 mt-1 flex flex-wrap gap-x-3">
+                  {% if r.last_seen_at %}
+                    <span>last failed {{ r.last_seen_at.strftime('%Y-%m-%d %H:%M:%SZ') }}</span>
+                  {% endif %}
+                  {% if r.first_seen_at and r.first_seen_at != r.last_seen_at %}
+                    <span>first {{ r.first_seen_at.strftime('%Y-%m-%d %H:%M:%SZ') }}</span>
+                  {% endif %}
+                  {% if r.file_id %}
+                    <a href="/review/{{ r.file_id }}" class="text-slate-500 hover:underline">review file</a>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="shrink-0 flex items-center gap-1.5">
+                <form method="post" action="/admin/file-errors/{{ r.id }}/try-open">
+                  <button type="submit"
+                          class="rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-100"
+                          title="Re-run open_archive against this path">
+                    Try open
+                  </button>
+                </form>
+                <form method="post" action="/admin/file-errors/{{ r.id }}/dismiss"
+                      onsubmit="return confirm('Drop this row without retrying?')">
+                  <button type="submit"
+                          class="rounded-md border border-rose-300 bg-white text-rose-700 text-xs font-medium px-3 py-1.5 hover:bg-rose-50"
+                          title="Remove the row from the inspector">
+                    Dismiss
+                  </button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+  {% endif %}
+
+  {# Clipboard handler for the Copy buttons rendered by ``path_link``
+     on each row. One delegated listener for the whole page. #}
+  {{ path_link_script() }}
+</main>
+{% endblock %}

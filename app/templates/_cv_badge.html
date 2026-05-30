@@ -1,0 +1,33 @@
+{# Top-right banner decoration linking to the canonical ComicVine page
+   for the current item. Used on volume/issue heroes.
+
+   Takes the item's ``site_detail_url`` (usually pulled from
+   ``raw_payload.site_detail_url`` — CV includes it on every entity
+   response). Renders nothing when the URL is missing (stub items
+   that haven't been hydrated yet).
+
+   Rendered as a small circular white badge containing the ComicVine
+   "CV" mark, so the source is recognisable at a glance. White
+   background + shadow + ring keep it legible on any banner art;
+   hover bumps the ring opacity for visual feedback.
+
+   The mark is served locally from ``/static/comicvine-icon.png`` (so
+   we don't hotlink CV's CDN). It renders at 20px; the source is
+   ~225x182 — ample headroom for high-DPI screens. The CV mark is
+   landscape, so ``object-contain`` fits it into the square slot
+   without distortion. Setting the project up fresh: save ComicVine's
+   logo mark to that path.
+#}
+{% macro cv_badge(url) %}
+  {% if url %}
+    <a href="{{ url }}"
+       target="_blank" rel="noopener noreferrer"
+       title="View on ComicVine"
+       class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white shadow-md ring-1 ring-white/40 hover:ring-white/80 hover:scale-105 transition-all">
+      <img src="{{ static_url('comicvine-icon.png') }}"
+           alt="ComicVine"
+           class="w-6 h-6 object-contain"
+           width="24" height="24">
+    </a>
+  {% endif %}
+{% endmacro %}

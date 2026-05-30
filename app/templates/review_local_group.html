@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Create a local volume &middot; Review &middot; Longboxes{% endblock %}
+{% block body %}
+{% include "_header.html" %}
+{% from "_reader_link.html" import reader_link %}
+
+{# Phase 11D — bulk create-from-group. A whole review-queue series group
+   whose comic has no ComicVine record at all becomes one local volume
+   plus a local issue per file, in a single submit. The local-metadata
+   counterpart of /review/volume-confirm; reached from the "Create a
+   local volume" escape hatch on the volume-search and volume-confirm
+   pages. ``preview`` is a ``LocalGroupPreview`` — see app/services/
+   local.py. The route redirects to /review when the group has drained,
+   so if this page renders ``preview.files`` is non-empty.
+
+   The volume name doubles as a find-or-create picker over existing
+   local volumes — the same pattern as review_local_entry.html lifted
+   to the bulk case. When the seeded series key already matches a local
+   volume's name (case-insensitive), the page auto-opens in "attaching"
+   mode so the common "next batch of an ongoing local series" flow
+   needs no typing. ``conflicts`` is a ``{file_id: reason}`` map of
+   issue-number collisions returned by ``attach_local_group`` when the
+   reviewer's submission would duplicate a number already in the target
+   volume — surfaced inline next to the offending row. ``form_values``
+   echoes the submitted values on a re-render so edits aren't lost. #}
+
+<main class="max-w-4xl mx-auto px-6 py-6 space-y-6"
+      x-data='{
+        volumes: {{ local_volumes | tojson }},
+        volumeName: {{ preview.suggested_volume_name | tojson }},
+        volumeYear: {{ (preview.suggested_volume_year or "") | tojson }},
+        publisherName: "",
+        description: "",
+        selectedId: {{ (form_values.local_volume_id or "") | tojson }},
+        showList: false,
+        init() {
+          // Auto-pick on init when an existing volume name matches the
+          // seeded series key exactly. Skipped when the route already
+          // restored a selectedId on a re-render (conflicts path).
+          if (this.selectedId) {
+            const sel = this.volumes.find(v => v.id === this.selectedId);
+            if (sel) this.pickExisting(sel, /*silent=*/true);
+            return;
+          }
+          const q = this.volumeName.trim().toLowerCase();
+          if (!q) return;
+          const exact = this.volumes.find(
+            v => (v.name || "").toLowerCase() === q
+          );
+          if (exact) this.pickExisting(exact, /*silent=*/true);
+        },
+        matches() {
+          const q = this.volumeName.trim().toLowerCase();
+          const list = q
+            ? this.volumes.filter(v => v.name.toLowerCase().includes(q))
+            : this.volumes;
+          return list.slice(0, 8);
+        },
+        isExisting() { return this.selectedId !== ""; },
+        pickExisting(v, silent) {
+          this.selectedId = v.id;
+          this.volumeName = v.name;
+          this.volumeYear = v.year || "";
+          this.publisherName = v.publisher_name || "";
+          this.description = v.description || "";
+          if (!silent) this.showList = false;
+        },
+        clearExisting() {
+          this.selectedId = "";
+          this.volumeYear = {{ (preview.suggested_volume_year or "") | tojson }};
+          this.publisherName = "";
+          this.description = "";
+        },
+        onNameInput() {
+          if (this.selectedId) {
+            const sel = this.volumes.find(v => v.id === this.selectedId);
+            if (!sel || sel.name !== this.volumeName) this.selectedId = "";
+          }
+          this.showList = true;
+        }
+      }'>
+  <div class="space-y-1">
+    <nav class="text-xs text-slate-500">
+      <a href="/review" class="hover:underline">&larr; Review queue</a>
+    </nav>
+    <h1 class="text-2xl font-semibold tracking-tight">
+      <span x-show="!isExisting()">Create a local volume</span>
+      <span x-show="isExisting()" x-cloak>Attach to an existing local volume</span>
+    </h1>
+    <p class="text-sm text-slate-600">
+      For a series that isn't in ComicVine at all. Every PENDING file in
+      the
+      <span class="font-mono text-slate-700">{{ preview.series_key or "(unparsed)" }}</span>
+      group joins one local volume as a local issue — the whole group
+      leaves the review queue and the matcher won't touch these files
+      again.
+    </p>
+  </div>
+
+  {% if conflicts %}
+    {# The whole submit was rejected — none of the issues were written.
+       The reviewer needs to edit the offending issue numbers below. #}
+    <div class="bg-rose-50 border border-rose-200 rounded-lg p-4 text-sm text-rose-800">
+      <div class="font-semibold mb-1">Issue-number conflict</div>
+      <p>
+        {{ conflicts|length }}
+        file{{ "s" if conflicts|length != 1 else "" }} below
+        {{ "have" if conflicts|length != 1 else "has" }} an issue number
+        that's already in the target local volume or duplicates another
+        file in this batch. Adjust the numbers and resubmit; nothing has
+        been saved.
+      </p>
+    </div>
+  {% endif %}
+
+  {# One form for the whole group. ``volume_*`` fields build the single
+     local_volumes row when creating new; the per-file rows below each
+     contribute a parallel ``file_id`` / ``issue_number`` pair the route
+     zips into a {file_id: issue_number} map. #}
+  <form method="post" action="/review/local-group" class="space-y-6">
+    {# Series key rides along so the submit re-derives exactly the group
+       the reviewer previewed (the queue is the single source of truth —
+       a file confirmed in another tab is dropped, not clobbered). #}
+    <input type="hidden" name="series" value="{{ preview.series_key or '' }}">
+    {# Carries the picked existing volume id; blank ⇒ create new. #}
+    <input type="hidden" name="local_volume_id" :value="selectedId">
+
+    {# ---- Series / volume — find-or-create ---- #}
+    <section class="bg-white border border-slate-200 rounded-lg p-4 sm:p-5 space-y-4">
+      <div class="text-sm font-semibold text-slate-800">Local volume</div>
+
+      <div class="relative" @click.away="showList = false">
+        <label class="block">
+          <span class="text-xs text-slate-500">Volume name</span>
+          <input type="text" name="volume_name" required autocomplete="off"
+                 x-model="volumeName"
+                 @focus="showList = true" @input="onNameInput()"
+                 placeholder="e.g. My Indie Series"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+        </label>
+
+        {# Autocomplete: existing local volumes matching what's typed. #}
+        <div x-show="showList && matches().length > 0" x-cloak
+             class="absolute z-20 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+          <template x-for="v in matches()" :key="v.id">
+            <button type="button" @click="pickExisting(v)"
+                    class="block w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-b-0">
+              <span class="text-sm font-medium text-slate-900" x-text="v.name"></span>
+              <span class="text-sm text-slate-400" x-text="v.year ? ' (' + v.year + ')' : ''"></span>
+              <span class="block text-xs text-slate-400" x-text="v.publisher_name || ''"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      {# Find-or-create indicator. #}
+      <div class="text-xs">
+        <template x-if="isExisting()">
+          <span class="text-emerald-700">
+            Attaching every file in this group to an existing local volume.
+            <button type="button" @click="clearExisting()"
+                    class="underline hover:no-underline">Create a new one instead</button>
+          </span>
+        </template>
+        <template x-if="!isExisting()">
+          <span class="text-slate-500">A new local volume will be created.</span>
+        </template>
+      </div>
+
+      {# Year / publisher / description — editable when creating; shown
+         disabled (and not submitted as the new volume's metadata; the
+         existing volume's metadata is left alone) when attaching. #}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-xs text-slate-500">Volume year
+            <span class="text-slate-300">(optional)</span></span>
+          <input type="number" name="volume_year"
+                 x-model="volumeYear" :disabled="isExisting()"
+                 placeholder="e.g. 2018"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none disabled:bg-slate-50 disabled:text-slate-400">
+        </label>
+        <label class="block">
+          <span class="text-xs text-slate-500">Publisher
+            <span class="text-slate-300">(optional)</span></span>
+          <input type="text" name="publisher_name"
+                 x-model="publisherName" :disabled="isExisting()"
+                 placeholder="e.g. self-published"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none disabled:bg-slate-50 disabled:text-slate-400">
+        </label>
+      </div>
+      <label class="block">
+        <span class="text-xs text-slate-500">Description
+          <span class="text-slate-300">(optional)</span></span>
+        <textarea name="description" rows="3"
+                  x-model="description" :disabled="isExisting()"
+                  placeholder="A short blurb about this volume."
+                  class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none disabled:bg-slate-50 disabled:text-slate-400"></textarea>
+      </label>
+    </section>
+
+    {# ---- One local issue per file ---- #}
+    <section class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <div class="px-4 sm:px-5 py-3 border-b border-slate-100">
+        <div class="text-sm font-semibold text-slate-800">
+          Issues
+          <span class="font-normal text-slate-400">
+            &mdash; one per file, {{ preview.file_count }}
+            file{{ "s" if preview.file_count != 1 else "" }} in this group
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">
+          Each file becomes a local issue. Issue numbers are seeded from
+          the parsed filename — adjust any that parsed wrong; leave one
+          blank for an unnumbered issue. Titles are optional.
+        </p>
+      </div>
+      <div class="p-4 sm:p-5 space-y-2">
+        {% set fnums = form_values.file_issue_numbers or {} %}
+        {% set fnames = form_values.file_issue_names or {} %}
+        {% for f in preview.files %}
+          {% set fid = f.file_id|string %}
+          {% set conflict = conflicts.get(fid) if conflicts else None %}
+          {% set submitted_num = fnums.get(fid) %}
+          {% set submitted_name = fnames.get(fid) %}
+          {# ``file_id`` (hidden), ``issue_number`` and ``issue_name``
+             (text) are parallel POST arrays — exactly one of each per
+             row, document order preserved, so the route zips them back
+             together correctly. Text inputs always submit, even when
+             emptied, so the three arrays never drift out of alignment.
+             The row wraps the input pair below the filename on a narrow
+             viewport. A ``conflict`` row gets a rose ring + an inline
+             reason so the offending entry is unmissable. #}
+          <div class="flex flex-wrap items-center gap-3 rounded-lg border p-2
+                      {% if conflict %}border-rose-300 bg-rose-50/40
+                      {% else %}border-slate-200{% endif %}">
+            <input type="hidden" name="file_id" value="{{ f.file_id }}">
+            <div class="relative w-10 shrink-0 self-start rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
+              <img src="/review/file/{{ f.file_id }}/cover" alt="" loading="lazy"
+                   class="absolute inset-0 w-full h-full object-cover">
+              {{ reader_link(f.file_id) }}
+            </div>
+            <div class="min-w-0 flex-1 basis-44">
+              <div class="text-sm font-medium text-slate-900 break-all">{{ f.filename }}</div>
+              <div class="text-xs text-slate-400 mt-0.5">
+                parsed
+                {% if f.parsed_issue_number %}
+                  <span class="font-mono text-slate-600">#{{ f.parsed_issue_number }}</span>
+                {% else %}
+                  <span class="text-slate-300">no number</span>
+                {% endif %}
+              </div>
+              {% if conflict %}
+                <div class="text-xs text-rose-700 mt-1">
+                  {% if conflict == "existing" %}
+                    Issue number already exists in the target local volume.
+                  {% else %}
+                    Same issue number as another file in this batch.
+                  {% endif %}
+                </div>
+              {% endif %}
+            </div>
+            <div class="flex items-end gap-2 shrink-0">
+              <label class="block">
+                <span class="block text-xs text-slate-500 mb-1">Issue #</span>
+                <input type="text" name="issue_number"
+                       value="{{ submitted_num if submitted_num is not none else (f.parsed_issue_number or '') }}"
+                       placeholder="1"
+                       aria-label="Issue number for {{ f.filename }}"
+                       class="w-20 rounded-md px-2.5 py-1.5 text-sm font-mono focus:ring-1 outline-none
+                              {% if conflict %}border border-rose-400 focus:border-rose-500 focus:ring-rose-500
+                              {% else %}border border-slate-300 focus:border-slate-500 focus:ring-slate-500{% endif %}">
+              </label>
+              <label class="block">
+                <span class="block text-xs text-slate-500 mb-1">Title
+                  <span class="text-slate-300">(optional)</span></span>
+                <input type="text" name="issue_name"
+                       value="{{ submitted_name or '' }}"
+                       placeholder="e.g. The First Chapter"
+                       aria-label="Issue title for {{ f.filename }}"
+                       class="w-44 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-slate-500 focus:ring-1 focus:ring-slate-500 outline-none">
+              </label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# ---- Actions ---- #}
+    <div class="flex items-center justify-between gap-3">
+      <a href="/review" class="text-sm text-slate-600 hover:text-slate-900">&larr; Back to queue without saving</a>
+      <button type="submit"
+              class="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800">
+        <span x-show="!isExisting()">
+          Create volume &amp; {{ preview.file_count }}
+          issue{{ "s" if preview.file_count != 1 else "" }}
+        </span>
+        <span x-show="isExisting()" x-cloak>
+          Attach {{ preview.file_count }}
+          issue{{ "s" if preview.file_count != 1 else "" }}
+        </span>
+      </button>
+    </div>
+  </form>
+</main>
+{% endblock %}

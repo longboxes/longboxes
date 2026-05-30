@@ -1,0 +1,215 @@
+{# Arc-flow rail SVG renderer.
+
+   Takes a RailModel (from app.services.rail) and emits SVG. The model
+   has all the geometry baked in — this macro just translates fields
+   to SVG primitives. No layout logic lives here.
+
+   Visual treatment leans git-graph: a soft solid spine in slate-300,
+   vivid 2.5px-stroke colored branches with rounded caps, 6px filled
+   circle nodes, smooth cubic-bezier bends from spine to lane.
+
+   The model defines a fixed row_height; the rail SVG height equals
+   ``rows × row_height``. Callers align the rail vertically to the
+   first row of the list view by positioning the SVG container so its
+   y=0 lines up with the first table row's center y minus row_height/2. #}
+{% macro arc_rail(model, show_nodes=true) %}
+  {% if model.branches or model.height > 0 %}
+    <svg width="{{ model.width }}" height="{{ model.height }}"
+         viewBox="0 0 {{ model.width }} {{ model.height }}"
+         xmlns="http://www.w3.org/2000/svg"
+         aria-label="Story arc flow rail"
+         class="block">
+
+      {# Spine — the volume's main rail. Same stroke weight as branches
+         (2.5px) with a node per row so it reads as a first-class
+         "this is the trunk" line à la git's main branch, not just a
+         divider. Color is neutral slate so it doesn't compete with
+         the vivid arc colors on branches.
+
+         Spine nodes use the model's per-row y-centers (variable for
+         Gallery's cover-row alignment; uniform for List). Suppressed
+         entirely when ``show_nodes=false`` — the Arcs view renders
+         lines-only per spec §3 since the per-arc shelves already
+         encode which issues belong to which arc; the rail's job in
+         Arcs view is to expose temporal interleaving, which doesn't
+         need node anchors. #}
+      <line x1="{{ model.spine_x }}" y1="0"
+            x2="{{ model.spine_x }}" y2="{{ model.height }}"
+            stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+
+      {% if show_nodes %}
+        {% for spine_y in model.row_y_centers %}
+          <circle cx="{{ model.spine_x }}" cy="{{ spine_y }}" r="6"
+                  fill="#94a3b8"/>
+          <circle cx="{{ model.spine_x }}" cy="{{ spine_y }}" r="2.5"
+                  fill="#ffffff"/>
+        {% endfor %}
+      {% endif %}
+
+      {# Branches — external arcs (touch another volume in any way) go
+         LEFT of the spine with leftward geometry; internal arcs stay
+         RIGHT of the spine with rightward geometry. The ``side``
+         variables abstract over both, so the path templates below
+         don't need their own if/else for direction. #}
+      {% for branch in model.branches %}
+        {% if branch.is_external %}
+          {% set lane_x = model.spine_x - (branch.lane + 1) * model.lane_spacing %}
+          {% set outer_edge = 0 %}              {# arrowhead tip x #}
+          {% set inner_edge = 6 %}              {# arrow line end x #}
+          {% set arrow_pts_y_a = -4 %}          {# arrowhead y offsets #}
+          {% set arrow_pts_y_b = 4 %}
+          {% set arrow_pts_x = inner_edge %}
+        {% else %}
+          {% set lane_x = model.spine_x + (branch.lane + 1) * model.lane_spacing %}
+          {% set outer_edge = model.width %}
+          {% set inner_edge = model.width - 6 %}
+          {% set arrow_pts_y_a = -4 %}
+          {% set arrow_pts_y_b = 4 %}
+          {% set arrow_pts_x = inner_edge %}
+        {% endif %}
+        {% set first_y = model.row_y_centers[branch.nodes[0].row_index] %}
+        {% set last_y = model.row_y_centers[branch.nodes[-1].row_index] %}
+        {% set bend = model.bend_offset %}
+
+        {# Top edge — three possibilities. Bend direction matches the
+           branch's side (lane_x is left or right of spine_x). #}
+        {% if branch.top_diverge %}
+          <path d="M {{ model.spine_x }} {{ first_y - bend }}
+                   C {{ lane_x }} {{ first_y - bend }},
+                     {{ lane_x }} {{ first_y - bend }},
+                     {{ lane_x }} {{ first_y }}"
+                stroke="{{ branch.color }}" stroke-width="2.5"
+                fill="none" stroke-linecap="round"/>
+        {% elif branch.top_enters_from_prev_vol %}
+          {# L-shape entry matching the inter-jump return style:
+             horizontal in from the outer edge, 90° bend, vertical
+             down into the first node. No arrow — the L-shape already
+             reads as "this arc is flowing in from elsewhere," and an
+             arrowhead at the outer edge gets visually swallowed by
+             the surrounding rail content. #}
+          {% set entry_elbow_y = first_y - (model.row_height // 2 - 4) %}
+          <path d="M {{ outer_edge }} {{ entry_elbow_y }}
+                   L {{ lane_x }} {{ entry_elbow_y }}
+                   L {{ lane_x }} {{ first_y }}"
+                stroke="{{ branch.color }}" stroke-width="2.5"
+                fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        {% else %}{# top_fades #}
+          <line x1="{{ lane_x }}" y1="0" x2="{{ lane_x }}" y2="{{ first_y }}"
+                stroke="{{ branch.color }}" stroke-width="2.5"
+                stroke-linecap="round"/>
+        {% endif %}
+
+        {# Inter-node segments — straight vertical line for contiguous
+           runs, paired L-shapes (exit + entry) when the arc visited
+           another volume between two in-window nodes.
+
+           The L-shape pair stays inside the gap's vertical span (no
+           bulge into adjacent rows), so concurrent branches don't
+           interfere. Both elbows live in the open space between the
+           two node rows; only the exit half gets an arrowhead. #}
+        {% if branch.nodes|length > 1 %}
+          {% for n in range(branch.nodes|length - 1) %}
+            {% set node_a = branch.nodes[n] %}
+            {% set node_b = branch.nodes[n + 1] %}
+            {% set y_a = model.row_y_centers[node_a.row_index] %}
+            {% set y_b = model.row_y_centers[node_b.row_index] %}
+            {% if node_a.gap_after %}
+              {# Place both elbows close to the inter-node midpoint
+                 with a small fixed gap between them. Keeps the exit/
+                 entry pair reading as one coordinated detour instead
+                 of two unrelated stubs. #}
+              {% set mid_y = (y_a + y_b) / 2 %}
+              {% set exit_y = mid_y - 4 %}
+              {% set entry_y = mid_y + 4 %}
+              {# Exit L: down from node A, 90° turn toward the outer
+                 edge, horizontal out to the outer edge, arrowhead tip.
+                 The direction (left vs right) follows the branch's
+                 side via ``outer_edge`` / ``inner_edge``. #}
+              <path d="M {{ lane_x }} {{ y_a }}
+                       L {{ lane_x }} {{ exit_y }}
+                       L {{ inner_edge }} {{ exit_y }}"
+                    stroke="{{ branch.color }}" stroke-width="2.5"
+                    fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <polygon points="{{ outer_edge }},{{ exit_y }}
+                               {{ inner_edge }},{{ exit_y - 4 }}
+                               {{ inner_edge }},{{ exit_y + 4 }}"
+                       fill="{{ branch.color }}"/>
+              {# Entry L: horizontal in from outer edge, 90° down
+                 turn, vertical into node B. No arrowhead — the visual
+                 pair already reads "leaves and comes back." #}
+              <path d="M {{ inner_edge }} {{ entry_y }}
+                       L {{ lane_x }} {{ entry_y }}
+                       L {{ lane_x }} {{ y_b }}"
+                    stroke="{{ branch.color }}" stroke-width="2.5"
+                    fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            {% else %}
+              <line x1="{{ lane_x }}" y1="{{ y_a }}"
+                    x2="{{ lane_x }}" y2="{{ y_b }}"
+                    stroke="{{ branch.color }}" stroke-width="2.5"
+                    stroke-linecap="round"/>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+
+        {# Bottom edge — mirror of top, bend curves to the branch's side. #}
+        {% if branch.bottom_merge %}
+          <path d="M {{ lane_x }} {{ last_y }}
+                   C {{ lane_x }} {{ last_y + bend }},
+                     {{ lane_x }} {{ last_y + bend }},
+                     {{ model.spine_x }} {{ last_y + bend }}"
+                stroke="{{ branch.color }}" stroke-width="2.5"
+                fill="none" stroke-linecap="round"/>
+        {% elif branch.bottom_exits_to_next_vol %}
+          {# L-shape exit symmetric with the entry: vertical down from
+             the last node, 90° bend, horizontal out to the outer edge.
+             Out-arrow at the outer edge — the arrowhead is past the
+             rail's lane stack so it doesn't get visually eaten. #}
+          {% set exit_elbow_y = last_y + (model.row_height // 2 - 4) %}
+          <path d="M {{ lane_x }} {{ last_y }}
+                   L {{ lane_x }} {{ exit_elbow_y }}
+                   L {{ inner_edge }} {{ exit_elbow_y }}"
+                stroke="{{ branch.color }}" stroke-width="2.5"
+                fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <polygon points="{{ outer_edge }},{{ exit_elbow_y }}
+                           {{ inner_edge }},{{ exit_elbow_y + arrow_pts_y_a }}
+                           {{ inner_edge }},{{ exit_elbow_y + arrow_pts_y_b }}"
+                   fill="{{ branch.color }}"/>
+        {% else %}{# bottom_fades #}
+          <line x1="{{ lane_x }}" y1="{{ last_y }}"
+                x2="{{ lane_x }}" y2="{{ model.height }}"
+                stroke="{{ branch.color }}" stroke-width="2.5"
+                stroke-linecap="round"/>
+        {% endif %}
+
+        {# Nodes — filled circles at every in-window member row. The
+           branch line passes underneath; the node sits on top.
+           Suppressed in lines-only mode (Arcs view) along with the
+           spine nodes above. #}
+        {% if show_nodes %}
+          {% for node in branch.nodes %}
+            {% set node_y = model.row_y_centers[node.row_index] %}
+            <circle cx="{{ lane_x }}" cy="{{ node_y }}" r="6"
+                    fill="{{ branch.color }}"/>
+            {# White inner dot for a slightly more git-graph "commit dot"
+               feel — reads as a deliberate marker rather than a blob. #}
+            <circle cx="{{ lane_x }}" cy="{{ node_y }}" r="2.5"
+                    fill="#ffffff"/>
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+
+      {# Multi-arc connectors — faint dashed horizontal line tying
+         together the nodes on a row that participates in 2+ branches.
+         X coords are pre-resolved (side-aware) in build_list_rail, so
+         the template just uses min/max directly. May cross the spine
+         when a row has both an external and an internal branch. #}
+      {% for row_idx, node_xs in model.multi_arc_rows %}
+        {% set row_y = model.row_y_centers[row_idx] %}
+        <line x1="{{ node_xs[0] }}" y1="{{ row_y }}"
+              x2="{{ node_xs[-1] }}" y2="{{ row_y }}"
+              stroke="#64748b" stroke-width="1.25"
+              stroke-opacity="0.4" stroke-dasharray="2 3"/>
+      {% endfor %}
+    </svg>
+  {% endif %}
+{% endmacro %}

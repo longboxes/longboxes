@@ -1,0 +1,77 @@
+{# Macros for the /arc/<id> page. Extracted so the page itself and
+   the ``/arc/<id>/issues/hydration`` poll endpoint render identical
+   markup — the endpoint re-renders rows as their underlying
+   ``cv_issues`` rows hydrate, and the client swaps them in place via
+   the generic ``setupAutoRefresh`` helper.
+
+   Each row carries ``data-pending-id`` + ``data-hydrated``: the
+   helper scans for ``data-hydrated="false"`` to build its initial
+   pending set, then the server confirms hydration via the swap
+   payload. ``data-hydrated="true"`` is omitted (default) for rows
+   that don't need polling.
+
+   The list row's ``id`` is ``arc-issue-row-<cv_id>`` and the
+   gallery cover's ``id`` is ``arc-gallery-<cv_id>`` — the
+   helper looks the elements up by ID and replaces them. #}
+
+{% from "_format_macros.html" import format_badge %}
+
+{# ---- List view row ---- #}
+{% macro arc_issue_row(i) %}
+  {% set display_name = i.name or ("Issue " ~ (i.issue_number or "?")) %}
+  {% set link_color = "text-slate-900" if i.owned else "text-slate-400" %}
+  <tr id="arc-issue-row-{{ i.cv_id }}"
+      data-pending-id="{{ i.cv_id }}"
+      data-hydrated="{{ 'true' if i.is_hydrated else 'false' }}"
+      {# Pagination — only rows whose ``arc_idx`` falls inside the
+         current ``start`` / ``count`` window render. ``x-cloak`` on
+         the table itself keeps the page from flashing the full set
+         before Alpine boots. #}
+      x-show="{{ i.arc_idx }} >= start && {{ i.arc_idx }} < start + count"
+      x-cloak
+      class="group border-t border-slate-100 hover:bg-slate-50 {% if not i.owned %}text-slate-400{% endif %}">
+    <td class="py-1 px-3 align-middle">
+      <a href="/issue/{{ i.cv_id }}"
+         class="block w-10 rounded overflow-hidden border border-slate-200 bg-slate-100 {% if not i.owned %}opacity-60 group-hover:opacity-100{% endif %} transition-opacity"
+         style="aspect-ratio: 2 / 3;">
+        {% if i.cover_url %}
+          <img src="{{ i.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
+        {% endif %}
+      </a>
+    </td>
+    <td class="py-1 px-3 font-mono align-middle">
+      <a class="hover:underline {{ link_color }}" href="/issue/{{ i.cv_id }}">{{ i.issue_number or "?" }}</a>
+    </td>
+    <td class="py-1 px-3 align-middle">
+      <a class="hover:underline {{ link_color }}" href="/issue/{{ i.cv_id }}">{{ display_name }}</a>
+    </td>
+    <td class="py-1 px-3 align-middle">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        {% if i.volume_cv_id %}
+          {# ``?from=<cv_id>`` lands the user on the volume page
+             anchored to THIS specific issue (centered with 2 rows
+             of context above) rather than at issue #1. Same
+             pattern as the first-owned window heuristic; this
+             just lets an arc click supply the anchor explicitly. #}
+          <a class="hover:underline text-slate-600" href="/volume/{{ i.volume_cv_id }}?from={{ i.cv_id }}">{{ i.volume_name or "Unknown" }}{% if i.volume_year %} <span class="text-slate-400">({{ i.volume_year }})</span>{% endif %}</a>
+        {% else %}
+          <span class="text-slate-400">{{ i.volume_name or "—" }}</span>
+        {% endif %}
+        {{ format_badge(i.volume_format) }}
+      </div>
+    </td>
+    <td class="py-1 px-3 text-right align-middle">
+      {% if i.owned %}
+        <span class="inline-block rounded-full bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5">owned</span>
+      {% else %}
+        <span class="inline-block rounded-full bg-slate-100 text-slate-500 text-xs px-2 py-0.5">missing</span>
+      {% endif %}
+    </td>
+  </tr>
+{% endmacro %}
+
+{# Gallery view cover card is now ``issue_cover_card`` from
+   ``_issue_card.html`` — shared with the volume page. Callers
+   pass ``dom_id='arc-gallery-<cv_id>'`` so the auto-refresh
+   helper's swap targets stay distinct from the volume page's
+   ``gallery-issue-<cv_id>`` IDs. #}
