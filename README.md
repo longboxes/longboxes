@@ -75,6 +75,10 @@ On the near-term roadmap:
 
 Design notes for these and other in-flight subsystems live in [`design/`](design/).
 
+## Development
+
+Longboxes was built by Mock1 with AI collaboration. The design, the decisions, and the understanding are mine; the AI was a tireless pair programmer who never gets bored of refactoring.
+
 ## Contributing
 
 PRs and issues welcome. The stack is Python 3.12 + FastAPI + async SQLAlchemy + Jinja2 + Alpine.js + Tailwind CSS, backed by PostgreSQL + Redis and an RQ background worker pool.
