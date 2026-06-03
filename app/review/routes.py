@@ -554,6 +554,7 @@ async def volume_confirm_covers_hydration(
     db: DbSessionDep,
     volume_cv_id: int,
     ids: Annotated[str, Query()] = "",
+    size_class: Annotated[str, Query()] = "w-16 md:w-10",
 ):
     """Poll endpoint feeding the Confirm Volume page's ``setupAutoRefresh``.
 
@@ -569,6 +570,12 @@ async def volume_confirm_covers_hydration(
     ``{swaps: [...], completed_ids: [...]}`` response contract. No
     CV calls happen here; this only surfaces data already written by
     ``hydrate_volume_issues`` (or per-issue fetches).
+
+    ``size_class`` is echoed into the swap fragments' macro call so
+    the replacement div carries the same Tailwind width classes as
+    the placeholder it replaces — otherwise the cover would resize
+    mid-render. Default matches the Confirm Volume page's file-list
+    row variant; ``review_file_issues.html`` passes ``w-12``.
     """
     # ``queue_status`` is computed even when ``ids`` is empty — the
     # client can poll with no pending IDs once to read state (e.g.
@@ -609,7 +616,7 @@ async def volume_confirm_covers_hydration(
         swaps.append(
             {
                 "target_id": f"matched-cover-{row.cv_id}",
-                "html": str(cover_macro(row.cv_id, cover_url)),
+                "html": str(cover_macro(row.cv_id, cover_url, size_class=size_class)),
             }
         )
         completed_ids.append(row.cv_id)
@@ -1498,6 +1505,28 @@ async def file_volume_issues(
         ) from e
     finally:
         await client.aclose()
+
+    # Defensive bulk-hydration nudge — same shape as
+    # /review/volume-confirm. The matcher / cv-cache normally
+    # enqueues a ``volume_issues`` job when the volume is first
+    # touched, but this page can land before that job runs (or for
+    # a volume whose original job was enqueued before
+    # ``at_front=True``). When any issue row is still a pure stub
+    # (``fetched_at IS NULL``), re-enqueue. ``enqueue_revalidate``
+    # promotes ``volume_issues`` to the head of the queue so the
+    # ``setupAutoRefresh`` poll loop on the page can swap in the
+    # real per-issue covers within seconds. Guarded so a
+    # fully-hydrated volume isn't nudged on every load.
+    has_unhydrated = (
+        await db.execute(
+            select(CvIssue.cv_id)
+            .where(CvIssue.volume_cv_id == volume)
+            .where(CvIssue.fetched_at.is_(None))
+            .limit(1)
+        )
+    ).scalar_one_or_none() is not None
+    if has_unhydrated:
+        enqueue_revalidate("volume_issues", volume)
 
     issues = await list_volume_issues(
         db,

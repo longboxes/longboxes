@@ -14,15 +14,19 @@
    Both call sites pass the same arguments; the macro decides which
    data-* attributes to emit based on whether `cover_url` is set.
 
-   Sizing classes match the inline div this replaced — the file-list
-   row uses ``w-16`` on mobile and ``w-10`` on md+. Don't change one
-   without the other, or the swap-in will resize mid-render.
+   Sizing classes default to the file-list row variant (``w-16`` on
+   mobile, ``w-10`` on md+) used by the Confirm Volume page. Other
+   call sites override via ``size_class`` — the issue-picker grid
+   uses ``w-12`` for example. Both call sites must pass the SAME
+   classes here as in the rendered swap fragment from the covers
+   endpoint, or the swap will resize mid-render. The /covers route
+   honours ``size_class`` for that reason.
 #}
-{% macro matched_cover(issue_cv_id, cover_url) %}
+{% macro matched_cover(issue_cv_id, cover_url, size_class="w-16 md:w-10") %}
 <div id="matched-cover-{{ issue_cv_id }}"
      data-pending-id="{{ issue_cv_id }}"
      data-hydrated="{{ 'true' if cover_url else 'false' }}"
-     class="relative self-start w-16 md:w-10 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100"
+     class="relative self-start {{ size_class }} shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100"
      style="aspect-ratio: 2 / 3;">
   {% if cover_url %}
     <img src="{{ cover_url }}" alt="" loading="lazy"

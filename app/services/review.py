@@ -897,22 +897,30 @@ async def list_volume_issues(
         .all()
     )
 
-    volume = await db.get(CvVolume, volume_cv_id)
-    volume_cover = cv_image_url(volume.raw_payload, "thumb") if volume is not None else None
-
     suggested_cv_id: int | None = None
     if suggested_number is not None:
         matched = await find_issue_by_number(db, volume_cv_id, suggested_number)
         if matched is not None:
             suggested_cv_id = matched.cv_id
 
+    # Per-issue cover only — deliberately NO volume-cover fallback.
+    # ComicVine sets the volume's primary cover to its first issue's
+    # cover, so a fallback to ``volume.raw_payload.image`` paints
+    # every un-hydrated row with the first issue's thumbnail, which
+    # reads as "all the covers are broken" or "every issue is the
+    # same". A stub issue gets ``None``; the template's matched_cover
+    # macro renders a neutral spinner placeholder, and the page's
+    # ``setupAutoRefresh`` swaps in the real per-issue cover once the
+    # volume's bulk issue-hydration job (``hydrate_volume_issues``)
+    # populates ``cv_issues.raw_payload.image``. Same pattern as the
+    # Confirm Volume page (``review_volume_confirm.html``).
     options = [
         IssueOption(
             issue_cv_id=issue.cv_id,
             issue_number=issue.issue_number,
             name=issue.name,
             cover_date=(issue.cover_date.isoformat() if issue.cover_date else None),
-            cover_url=cv_image_url(issue.raw_payload, "thumb") or volume_cover,
+            cover_url=cv_image_url(issue.raw_payload, "thumb"),
             is_suggested=issue.cv_id == suggested_cv_id,
         )
         for issue in issues

@@ -1,11 +1,28 @@
 {% extends "base.html" %}
 {% from "_pagination.html" import pagination_count_label, load_earlier_button, load_more_buttons %}
 {% from "_reader_link.html" import reader_link %}
+{% from "_matched_cover.html" import matched_cover %}
 {% block title %}Pick an issue &middot; Review &middot; Longboxes{% endblock %}
 {% block body %}
 {% include "_header.html" %}
 
-<main class="max-w-6xl mx-auto px-6 py-6 space-y-6">
+{# Spread ``setupAutoRefresh`` over the page so any issue still showing
+   the spinner placeholder (no per-issue cover yet) polls the
+   volume-confirm covers endpoint and gets its real cover swapped in
+   when ``hydrate_volume_issues`` finishes. The endpoint is keyed by
+   volume_cv_id and not the file context, so reusing it from this page
+   is safe — same volume, same cv_issues rows. ``scanPending`` reads
+   the ``data-pending-id`` + ``data-hydrated='false'`` attributes the
+   ``matched_cover`` macro emits and starts the polling loop only when
+   there's work to do; fully hydrated pages stay silent. #}
+<main class="max-w-6xl mx-auto px-6 py-6 space-y-6"
+      x-data="{
+        {# size_class is echoed back in the swap fragment so the replacement
+           div carries the same w-12 class as the placeholder it replaces —
+           without this, the cover would resize mid-render. #}
+        ...setupAutoRefresh({ endpoint: '/review/volume-confirm/{{ volume_cv_id }}/covers?size_class=w-12' }),
+        init() { this.scanPending(); }
+      }">
   <div class="space-y-1">
     <nav class="text-xs text-slate-500">
       <a href="/review/{{ review.file_id }}/volume-search{% if back_query %}?q={{ back_query|urlencode }}{% endif %}"
@@ -107,11 +124,13 @@
                      {% else %}bg-white border border-slate-200 hover:border-slate-400{% endif %}">
           <input type="hidden" name="issue_cv_id" value="{{ i.issue_cv_id }}">
           <div class="flex items-start gap-3">
-            <div class="w-12 shrink-0 rounded overflow-hidden border border-slate-200 bg-slate-100" style="aspect-ratio: 2 / 3;">
-              {% if i.cover_url %}
-                <img src="{{ i.cover_url }}" alt="" loading="lazy" class="w-full h-full object-cover">
-              {% endif %}
-            </div>
+            {# matched_cover emits the swap-target id + data-* attrs
+               that setupAutoRefresh on <main> watches. When
+               ``i.cover_url`` is None (un-hydrated issue), the macro
+               renders a spinner placeholder; the covers endpoint
+               returns a swap fragment for this cv_id once the bulk
+               hydrate populates raw_payload.image. #}
+            {{ matched_cover(i.issue_cv_id, i.cover_url, size_class="w-12") }}
             <div class="min-w-0">
               {% if i.is_suggested %}
                 <div class="text-xs uppercase tracking-wide text-emerald-700 font-semibold">
