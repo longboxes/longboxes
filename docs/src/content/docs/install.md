@@ -54,9 +54,10 @@ need to clone the source.
 Create a `.env` next to the compose file. The minimum:
 
 ```bash
-# Where your library lives, *inside the container*. The host path
-# is set via the volume mount in docker-compose.yml — see step 3.
-LIBRARY_PATHS=/library
+# Where your library lives on the host. The compose file
+# bind-mounts this folder read-only into the container at
+# /library, where the scanner walks it. Use an absolute path.
+LIBRARY_PATH=/path/to/your/comics
 
 # Postgres password. Change this. Don't reuse a password you use
 # elsewhere — it's only ever read by the local DB container, but
@@ -93,32 +94,41 @@ CV_RATE_PER_HOUR=195
 
 ## Step 3 — Point at your library
 
-Edit `docker-compose.yml`. Near the top of the `web` and `worker`
-services you'll see a volume mount that looks like this:
+For a **single library folder**, you're done after Step 2 — the
+compose file's volume mount reads `${LIBRARY_PATH}` from `.env` and
+bind-mounts it read-only into the container at `/library`. No YAML
+editing required.
+
+The `:ro` flag on the mount is important — Longboxes mounts your
+library **read-only**. It never writes to your archive files.
+(Future "metadata sync" support will need write access, but
+that's an explicit opt-in when it lands.)
+
+### Multiple library folders
+
+If your library spans multiple folders, the simplest approach is to
+point `LIBRARY_PATH` at a parent that contains all of them — the
+scanner walks subdirectories recursively, so one mount handles any
+nested layout.
+
+If that's not workable (e.g. the folders live on different volumes),
+edit `docker-compose.yml` directly to add the extra mounts and
+override the in-container scanner paths:
 
 ```yaml
-volumes:
-  # Change the left side to where your comics live on the host.
-  - /path/to/your/comics:/library:ro
+services:
+  web:
+    volumes:
+      - /mnt/marvel:/library/marvel:ro
+      - /mnt/dc:/library/dc:ro
+      - /mnt/indie:/library/indie:ro
+    environment:
+      LIBRARY_PATHS: /library/marvel,/library/dc,/library/indie
 ```
 
-The `:ro` is important — Longboxes mounts your library **read-only**.
-It never writes to your archive files. (Future "metadata sync"
-support will need write access, but that's an explicit opt-in when
-it lands.)
-
-If your library spans multiple folders, repeat the mount and adjust
-`LIBRARY_PATHS` to a comma-separated list:
-
-```yaml
-- /mnt/marvel:/library/marvel:ro
-- /mnt/dc:/library/dc:ro
-- /mnt/indie:/library/indie:ro
-```
-
-```bash
-LIBRARY_PATHS=/library/marvel,/library/dc,/library/indie
-```
+Apply the same mounts to the `worker`, `worker-interactive`, and
+`worker-scan` services so background jobs see the same files the
+`web` container does.
 
 ## Step 4 — Bring the stack up
 
@@ -144,9 +154,11 @@ You'll be walked through:
 2. **Paste your ComicVine API key.** Set under
    `/admin/settings`. Test it with the button — Longboxes makes one
    call to confirm the key is valid before writing it.
-3. **Confirm the library paths.** Should match what you set in
-   `LIBRARY_PATHS`. The seed step writes them to `app_settings` so
-   they survive container restarts.
+3. **Confirm the library paths.** The admin UI shows the
+   *in-container* path (`/library` by default) — that's the
+   mount point your host `LIBRARY_PATH` is bind-mounted to. The
+   seed step writes it to `app_settings` so it survives container
+   restarts.
 
 Hit **Start scan** on the admin page. The first scan and match
 backlog will run in the background — you can browse what's there

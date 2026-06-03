@@ -22,16 +22,15 @@ then start it:
 mkdir longboxes && cd longboxes
 # Grab the latest compose file:
 curl -O https://raw.githubusercontent.com/longboxes/longboxes/main/deploy/docker-compose.yml
-# Minimal env (point at your library):
-echo 'LIBRARY_PATHS=/library' >> .env
+# Minimal env — set LIBRARY_PATH to the folder on your machine
+# holding the .cbz / .cbr files. The compose file bind-mounts it
+# read-only into the container at /library, so Longboxes never
+# writes to your archives.
+echo 'LIBRARY_PATH=/path/to/your/comics' >> .env
 echo 'POSTGRES_PASSWORD=change-me' >> .env
 
 docker compose up -d
 ```
-
-Edit `docker-compose.yml` and point the `library` volume mount at your
-comics folder (the line is commented near the top). The mount is
-**read-only by default** — Longboxes never writes to your archives.
 
 ## 3. First boot
 
